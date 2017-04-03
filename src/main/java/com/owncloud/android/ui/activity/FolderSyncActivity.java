@@ -307,7 +307,8 @@ public class FolderSyncActivity extends FileActivity implements FolderSyncAdapte
                 syncedFolder.isEnabled(),
                 mediaFolder.filePaths,
                 mediaFolder.folderName,
-                mediaFolder.numberOfFiles);
+                mediaFolder.numberOfFiles,
+                mediaFolder.type);
     }
 
     /**
@@ -330,7 +331,8 @@ public class FolderSyncActivity extends FileActivity implements FolderSyncAdapte
                 false,
                 mediaFolder.filePaths,
                 mediaFolder.folderName,
-                mediaFolder.numberOfFiles);
+                mediaFolder.numberOfFiles,
+                mediaFolder.type);
     }
 
     /**
