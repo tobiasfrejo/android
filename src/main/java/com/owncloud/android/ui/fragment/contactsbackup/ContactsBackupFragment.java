@@ -310,7 +310,7 @@ public class ContactsBackupFragment extends FileFragment implements DatePickerDi
                     contactsPreferenceActivity.getAccount());
         }
 
-        arbitraryDataProvider.storeOrUpdateKeyValue(account, PREFERENCE_CONTACTS_AUTOMATIC_BACKUP,
+        arbitraryDataProvider.storeOrUpdateKeyValue(account.name, PREFERENCE_CONTACTS_AUTOMATIC_BACKUP,
                 String.valueOf(bool));
     }
 

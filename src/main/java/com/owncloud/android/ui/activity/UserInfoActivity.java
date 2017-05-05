@@ -366,7 +366,7 @@ public class UserInfoActivity extends FileActivity {
                                     ArbitraryDataProvider arbitraryDataProvider = new ArbitraryDataProvider(
                                             contentResolver);
 
-                                    arbitraryDataProvider.storeOrUpdateKeyValue(account,
+                                    arbitraryDataProvider.storeOrUpdateKeyValue(account.name,
                                             ContactsPreferenceActivity.PREFERENCE_CONTACTS_AUTOMATIC_BACKUP,
                                             "false");
 
@@ -380,7 +380,7 @@ public class UserInfoActivity extends FileActivity {
                                         PushConfigurationState pushArbitraryData = gson.fromJson(arbitraryDataPushString,
                                                 PushConfigurationState.class);
                                         pushArbitraryData.setShouldBeDeleted(true);
-                                        arbitraryDataProvider.storeOrUpdateKeyValue(account, PushUtils.KEY_PUSH,
+                                        arbitraryDataProvider.storeOrUpdateKeyValue(account.name, PushUtils.KEY_PUSH,
                                                 gson.toJson(pushArbitraryData));
                                         EventBus.getDefault().post(new TokenPushEvent());
                                     }
