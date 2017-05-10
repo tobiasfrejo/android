@@ -115,6 +115,7 @@ public class MainApp extends MultiDexApplication {
 
         cleanOldEntries();
         updateAutoUploadEntries();
+        splitOutAutoUploadEntries();
 
         // register global protection with pass code
         registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
