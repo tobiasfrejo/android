@@ -39,6 +39,7 @@ import android.widget.CheckBox;
 import android.widget.TextView;
 
 import com.owncloud.android.R;
+import com.owncloud.android.datamodel.MediaFolder;
 import com.owncloud.android.datamodel.SyncedFolderDisplayItem;
 import com.owncloud.android.lib.common.utils.Log_OC;
 import com.owncloud.android.ui.activity.FolderPickerActivity;
@@ -53,6 +54,7 @@ public class SyncedFolderPreferencesDialogFragment extends DialogFragment {
     private final static String TAG = SyncedFolderPreferencesDialogFragment.class.getSimpleName();
     public static final String SYNCED_FOLDER_PARCELABLE = "SyncedFolderParcelable";
     public static final int REQUEST_CODE__SELECT_REMOTE_FOLDER = 0;
+    public static final int REQUEST_CODE__SELECT_LOCAL_FOLDER = 1;
 
     private CharSequence[] mUploadBehaviorItemStrings;
 
@@ -63,6 +65,7 @@ public class SyncedFolderPreferencesDialogFragment extends DialogFragment {
     private CheckBox mUploadUseSubfoldersCheckbox;
     private TextView mUploadBehaviorSummary;
     private TextView mLocalFolderPath;
+    private TextView mLocalFolderSummary;
     private TextView mRemoteFolderSummary;
 
     private SyncedFolderParcelable mSyncedFolder;
@@ -122,10 +125,16 @@ public class SyncedFolderPreferencesDialogFragment extends DialogFragment {
      * @param view the parent view
      */
     private void setupDialogElements(View view) {
+
+        if (mSyncedFolder.getType() > MediaFolder.CUSTOM) {
+            view.findViewById(R.id.local_folder_container).setVisibility(View.GONE);
+        }
+
         // find/saves UI elements
         mEnabledSwitch = (SwitchCompat) view.findViewById(R.id.sync_enabled);
         mLocalFolderPath = (TextView) view.findViewById(R.id.folder_sync_settings_local_folder_path);
 
+        mLocalFolderSummary = (TextView) view.findViewById(R.id.local_folder_summary);
         mRemoteFolderSummary = (TextView) view.findViewById(R.id.remote_folder_summary);
 
         mUploadOnWifiCheckbox = (CheckBox) view.findViewById(R.id.setting_instant_upload_on_wifi_checkbox);
@@ -137,15 +146,25 @@ public class SyncedFolderPreferencesDialogFragment extends DialogFragment {
 
         // Set values
         setEnabled(mSyncedFolder.getEnabled());
-        mLocalFolderPath.setText(
-                DisplayUtils.createTextWithSpan(
-                        String.format(
-                                getString(R.string.folder_sync_preferences_folder_path),
-                                mSyncedFolder.getLocalPath()),
-                        mSyncedFolder.getFolderName(),
-                        new StyleSpan(Typeface.BOLD)));
 
-        mRemoteFolderSummary.setText(mSyncedFolder.getRemotePath());
+        if(mSyncedFolder.getLocalPath() != null && mSyncedFolder.getLocalPath().length() > 0) {
+            mLocalFolderPath.setText(
+                    DisplayUtils.createTextWithSpan(
+                            String.format(
+                                    getString(R.string.folder_sync_preferences_folder_path),
+                                    mSyncedFolder.getLocalPath()),
+                            mSyncedFolder.getFolderName(),
+                            new StyleSpan(Typeface.BOLD)));
+            mLocalFolderSummary.setText(mSyncedFolder.getLocalPath());
+        } else {
+            mLocalFolderSummary.setText(R.string.choose_local_folder);
+        }
+
+        if(mSyncedFolder.getLocalPath() != null && mSyncedFolder.getLocalPath().length() > 0) {
+            mRemoteFolderSummary.setText(mSyncedFolder.getRemotePath());
+        } else {
+            mRemoteFolderSummary.setText(R.string.choose_remote_folder);
+        }
 
         mUploadOnWifiCheckbox.setChecked(mSyncedFolder.getWifiOnly());
         mUploadOnChargingCheckbox.setChecked(mSyncedFolder.getChargingOnly());
@@ -219,6 +238,16 @@ public class SyncedFolderPreferencesDialogFragment extends DialogFragment {
                 action.putExtra(
                         FolderPickerActivity.EXTRA_ACTION, getResources().getText(R.string.choose_remote_folder));
                 getActivity().startActivityForResult(action, REQUEST_CODE__SELECT_REMOTE_FOLDER);
+            }
+        });
+
+        view.findViewById(R.id.local_folder_container).setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent action = new Intent(getActivity(), FolderPickerActivity.class);
+                action.putExtra(
+                        FolderPickerActivity.EXTRA_ACTION, getResources().getText(R.string.choose_remote_folder));
+                getActivity().startActivityForResult(action, REQUEST_CODE__SELECT_LOCAL_FOLDER);
             }
         });
 
