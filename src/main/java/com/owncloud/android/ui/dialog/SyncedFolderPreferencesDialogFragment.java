@@ -47,6 +47,8 @@ import com.owncloud.android.ui.activity.UploadFilesActivity;
 import com.owncloud.android.ui.dialog.parcel.SyncedFolderParcelable;
 import com.owncloud.android.utils.DisplayUtils;
 
+import java.io.File;
+
 /**
  * Dialog to show the preferences/configuration of a synced folder allowing the user to change the different parameters.
  */
@@ -206,6 +208,13 @@ public class SyncedFolderPreferencesDialogFragment extends DialogFragment {
     public void setLocalFolderSummary(String path) {
         mSyncedFolder.setLocalPath(path);
         mLocalFolderSummary.setText(path);
+        mLocalFolderPath.setText(
+                DisplayUtils.createTextWithSpan(
+                        String.format(
+                                getString(R.string.folder_sync_preferences_folder_path),
+                                mSyncedFolder.getLocalPath()),
+                        new File(mSyncedFolder.getLocalPath()).getName(),
+                        new StyleSpan(Typeface.BOLD)));
     }
 
     /**
