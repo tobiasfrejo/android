@@ -4,7 +4,7 @@
     <bool name="is_beta">false</bool>
 
     <!-- App name  and other strings-->
-    <string name="app_name">Nextcloud</string>
+    <string name="app_name">FrejoCloud</string>
     <string name="account_type">nextcloud</string>	<!-- better if was a domain name; but changing it now would require migrate accounts when the app is updated -->
     <string name="authority">org.nextcloud</string>	<!-- better if was the app package with ".provider" appended ; it identifies the provider -->
     <string name="users_and_groups_search_authority">com.nextcloud.android.providers.UsersAndGroupsSearchProvider</string>
@@ -15,16 +15,16 @@
     <string name ="db_name">nextcloud</string>
     <string name ="data_folder">nextcloud</string>
     <string name ="log_name">nextcloud</string>
-    <string name ="default_display_name_for_root_folder">Nextcloud</string>
+    <string name ="default_display_name_for_root_folder">FrejoCloud</string>
     <string name ="user_agent">Mozilla/5.0 (Android) ownCloud-android/%1$s</string>
     
     <!-- URLs and flags related -->
-    <string name="server_url"></string>
-    <bool name="show_server_url_input">true</bool>
+    <string name="server_url">https://cloud.frejo.dk</string>
+    <bool name="show_server_url_input">false</bool>
     <!-- Can be regular (full input), prefix (subdomain input) and suffix (directory input) -->
     <!-- Requires server url to be set -->
     <string name="server_input_type">regular</string>
-    <bool name="show_welcome_link">true</bool>
+    <bool name="show_welcome_link">false</bool>
 	<string name="welcome_link_url">"https://nextcloud.com/providers"</string>
 	<string name="share_api_link"></string>
 
@@ -49,11 +49,11 @@
     <array name="whatsnew_urls"></array>
 
     <!-- Colors -->
-    <color name="primary">#0082c9</color>
-    <color name="primary_dark">#006AA3</color>
-    <color name="color_accent">#007CC2</color>
+    <color name="primary">#001e2f</color><!-- 79 (0) 21 -->
+    <color name="primary_dark">#000a0f</color> <!-- 64 (-15) 6 -->
+    <color name="color_accent">#001d2e</color><!-- 76 (-3) 18 -->
     <color name="login_text_color">@color/white</color>
-    <color name="login_text_hint_color">#7fC0E3</color>
+    <color name="login_text_hint_color">#2c424f</color><!-- 89 (+10) 31 -->
     <color name="login_background_color">#FFFFFF</color>
     <color name="login_logo_background_color">#FFFFFF</color>
     <color name="background_color">#FFFFFF</color>
@@ -82,7 +82,7 @@
     <bool name="recently_modified_enabled">false</bool>
     <bool name="shared_enabled">true</bool>
     <bool name="videos_enabled">false</bool>
-    <bool name="show_drawer_logout">false</bool>
+    <bool name="show_drawer_logout">true</bool>
 
     <!-- Various other options -->
     <bool name="allow_profile_click">true</bool>
@@ -105,8 +105,8 @@
     <bool name="logger_enabled">false</bool>
     <string name="url_imprint"></string>
     <string name="mail_recommend">"mailto:"</string>
-    <string name="mail_feedback">"mailto:android@nextcloud.com"</string>
-    <string name="url_app_download">"https://play.google.com/store/apps/details?id=com.nextcloud.client"</string>
+    <string name="mail_feedback">"mailto:nextcloudapp@frejo.dk"</string>
+    <string name="url_app_download">"https://github.com/tobiasfrejo/frejocloud-android"</string>
     <string name="url_server_install">https://nextcloud.com/install</string>
 
     <!-- synced folder light; if enabled: move to setting & global upload settings -->
@@ -120,7 +120,7 @@
     <string name="mail_logger"></string>
 
     <!-- Determine is participate enabled -->
-    <bool name="participate_enabled">true</bool>
+    <bool name="participate_enabled">false</bool>
     <!-- Participate links -->
     <string name="fdroid_beta_link" translatable="false">https://f-droid.org/repository/browse/?fdid=com.nextcloud.android.beta</string>
     <string name="beta_apk_link" translatable="false">https://download.nextcloud.com/android/dev/latest.apk</string>
