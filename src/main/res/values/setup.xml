@@ -4,7 +4,7 @@
     <bool name="is_beta">false</bool>
 
     <!-- App name  and other strings-->
-    <string name="app_name">FrejoCloud</string>
+    <string name="app_name">Nextcloud</string>
     <string name="account_type">nextcloud</string>	<!-- better if was a domain name; but changing it now would require migrate accounts when the app is updated -->
     <string name="authority">org.nextcloud</string>	<!-- better if was the app package with ".provider" appended ; it identifies the provider -->
     <string name="users_and_groups_search_authority">com.nextcloud.android.providers.UsersAndGroupsSearchProvider</string>
@@ -15,12 +15,12 @@
     <string name ="db_name">nextcloud</string>
     <string name ="data_folder">nextcloud</string>
     <string name ="log_name">nextcloud</string>
-    <string name ="default_display_name_for_root_folder">FrejoCloud</string>
+    <string name ="default_display_name_for_root_folder">Nextcloud</string>
     <string name ="user_agent">Mozilla/5.0 (Android) ownCloud-android/%1$s</string>
     
     <!-- URLs and flags related -->
-    <string name="server_url">https://cloud.frejo.dk</string>
-    <bool name="show_server_url_input">false</bool>
+    <string name="server_url"></string>
+    <bool name="show_server_url_input">true</bool>
     <!-- Can be regular (full input), prefix (subdomain input) and suffix (directory input) -->
     <!-- Requires server url to be set -->
     <string name="server_input_type">regular</string>
@@ -49,11 +49,11 @@
     <array name="whatsnew_urls"></array>
 
     <!-- Colors -->
-    <color name="primary">#001e2f</color><!-- 79 (0) 21 -->
-    <color name="primary_dark">#000a0f</color> <!-- 64 (-15) 6 -->
-    <color name="color_accent">#001d2e</color><!-- 76 (-3) 18 -->
+    <color name="primary">#1E2751</color>
+    <color name="primary_dark">#006AA3</color>
+    <color name="color_accent">#007CC2</color>
     <color name="login_text_color">@color/white</color>
-    <color name="login_text_hint_color">#2c424f</color><!-- 89 (+10) 31 -->
+    <color name="login_text_hint_color">#7fC0E3</color>
     <color name="login_background_color">#FFFFFF</color>
     <color name="login_logo_background_color">#FFFFFF</color>
     <color name="background_color">#FFFFFF</color>

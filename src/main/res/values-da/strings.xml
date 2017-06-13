@@ -2,7 +2,6 @@
 <resources>
     <string name="about_android">%1$s Android app</string>
     <string name="about_version">version %1$s</string>
-    <string name="about_based_on">Baseret på Nextcloud Android App version %1$s</string>
     <string name="actionbar_sync">Genindlæs konto</string>
     <string name="actionbar_upload">Upload</string>
     <string name="actionbar_upload_from_apps">Indhold fra andre apps</string>

@@ -583,7 +583,7 @@ public class Preferences extends PreferenceActivity
         pAboutApp = findPreference("about_app");
         if (pAboutApp != null) {
             pAboutApp.setTitle(String.format(getString(R.string.about_android), getString(R.string.app_name)));
-            pAboutApp.setSummary(String.format(getString(R.string.about_based_on), appVersion));
+            pAboutApp.setSummary(String.format(getString(R.string.about_version), appVersion));
         }
 
         // privacy
