@@ -85,7 +85,7 @@
     <bool name="show_drawer_logout">true</bool>
 
     <!-- Various other options -->
-    <bool name="allow_profile_click">false</bool>
+    <bool name="allow_profile_click">true</bool>
 
     <!-- Bottom toolbar -->
     <bool name="bottom_toolbar_enabled">false</bool>
@@ -139,7 +139,7 @@
     <string name="webview_login_url" translatable="false"></string>
 
     <!-- analytics enabled -->
-    <bool name="analytics_enabled">true</bool>
+    <bool name="analytics_enabled">false</bool>
 
     <!-- Files becomes Home -->
     <bool name="use_home">true</bool>
