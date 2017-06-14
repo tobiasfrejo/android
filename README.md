@@ -1,3 +1,10 @@
+# FrejoCloud Android app
+
+Forked from [Nextcloud Android App](https://github.com/nextcloud/android)
+
+
+Readme from Nextcloud repo:
+--------
 # [Nextcloud](https://nextcloud.com) Android app [![Build Status](https://drone.nextcloud.com/api/badges/nextcloud/android/status.svg)](https://drone.nextcloud.com/nextcloud/android) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/80401cb343854343b4d94acbfb72d3ec)](https://www.codacy.com/app/Nextcloud/android?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=nextcloud/android&amp;utm_campaign=Badge_Grade)
 
 [<img src="https://play.google.com/intl/en_us/badges/images/generic/en_badge_web_generic.png" 
