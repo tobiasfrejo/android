@@ -33,6 +33,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SyncResult;
 import android.os.Bundle;
+import android.support.annotation.PluralsRes;
 import android.support.v4.app.NotificationCompat;
 
 import com.owncloud.android.R;
@@ -45,7 +46,9 @@ import com.owncloud.android.lib.common.utils.Log_OC;
 import com.owncloud.android.operations.RefreshFolderOperation;
 import com.owncloud.android.operations.UpdateOCVersionOperation;
 import com.owncloud.android.ui.activity.ErrorsWhileCopyingHandlerActivity;
+import com.owncloud.android.ui.notifications.NotificationUtils;
 import com.owncloud.android.utils.DataHolderUtil;
+import com.owncloud.android.utils.ThemeUtils;
 
 import org.apache.jackrabbit.webdav.DavException;
 
@@ -442,8 +445,12 @@ public class FileSyncAdapter extends AbstractOwnCloudSyncAdapter {
                     getContext(), (int) System.currentTimeMillis(), new Intent(), 0
                 ))
                 .setContentTitle(i18n(R.string.sync_fail_in_favourites_ticker))
-                .setContentText(i18n(R.string.sync_fail_in_favourites_content,
-                        mFailedResultsCounter + mConflictsFound, mConflictsFound));
+                .setContentText(getQuantityString(
+                    R.plurals.sync_fail_in_favourites_content,
+                    mFailedResultsCounter,
+                    mFailedResultsCounter + mConflictsFound, mConflictsFound
+                    )
+                );
             
             showNotification(R.string.sync_fail_in_favourites_ticker, notificationBuilder);
         } else {
@@ -493,8 +500,12 @@ public class FileSyncAdapter extends AbstractOwnCloudSyncAdapter {
                 getContext(), (int) System.currentTimeMillis(), explanationIntent, 0
             ))
             .setContentTitle(i18n(R.string.sync_foreign_files_forgotten_ticker))
-            .setContentText(i18n(R.string.sync_foreign_files_forgotten_content,
-                    mForgottenLocalFiles.size(), i18n(R.string.app_name)));
+            .setContentText(getQuantityString(
+                    R.plurals.sync_foreign_files_forgotten_content,
+                    mForgottenLocalFiles.size(),
+                    mForgottenLocalFiles.size(),
+                    i18n(R.string.app_name))
+            );
         
         showNotification(R.string.sync_foreign_files_forgotten_ticker, notificationBuilder);
     }
@@ -502,12 +513,12 @@ public class FileSyncAdapter extends AbstractOwnCloudSyncAdapter {
     /**
      * Creates a notification builder with some commonly used settings
      * 
-     * @return
+     * @return notification builder
      */
     private NotificationCompat.Builder createNotificationBuilder() {
         NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(getContext());
         notificationBuilder.setSmallIcon(R.drawable.notification_icon).setAutoCancel(true);
-        notificationBuilder.setColor(getContext().getResources().getColor(R.color.primary));
+        notificationBuilder.setColor(ThemeUtils.primaryColor(getContext()));
         return notificationBuilder;
     }
     
@@ -518,8 +529,14 @@ public class FileSyncAdapter extends AbstractOwnCloudSyncAdapter {
      * @param builder
      */
     private void showNotification(int id, NotificationCompat.Builder builder) {
-        ((NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE))
-            .notify(id, builder.build());
+        NotificationManager notificationManager = ((NotificationManager) getContext().
+                getSystemService(Context.NOTIFICATION_SERVICE));
+
+        if ((android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O)) {
+            builder.setChannelId(NotificationUtils.NOTIFICATION_CHANNEL_FILE_SYNC);
+        }
+
+        notificationManager.notify(id, builder.build());
     }
     /**
      * Shorthand translation
@@ -530,5 +547,17 @@ public class FileSyncAdapter extends AbstractOwnCloudSyncAdapter {
      */
     private String i18n(int key, Object... args) {
         return getContext().getString(key, args);
+    }
+
+    /**
+     * Shorthand plurals translation.
+     *
+     * @param id         The desired plurals identifier.
+     * @param quantity   The number used to get the correct string for the current language's plural rules.
+     * @param formatArgs The format arguments that will be used for substitution.
+     * @return formatted, plurals respecting string
+     */
+    private String getQuantityString(@PluralsRes int id, int quantity, Object... formatArgs) {
+        return getContext().getResources().getQuantityString(id, quantity, formatArgs);
     }
 }

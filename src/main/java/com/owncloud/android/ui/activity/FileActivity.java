@@ -28,17 +28,20 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
+import android.support.design.widget.Snackbar;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentTransaction;
+import android.view.View;
 import android.widget.Toast;
 
 import com.owncloud.android.MainApp;
 import com.owncloud.android.R;
-import com.owncloud.android.authentication.AccountUtils;
 import com.owncloud.android.authentication.AuthenticatorActivity;
 import com.owncloud.android.datamodel.ArbitraryDataProvider;
 import com.owncloud.android.datamodel.OCFile;
@@ -65,11 +68,16 @@ import com.owncloud.android.operations.UpdateSharePermissionsOperation;
 import com.owncloud.android.operations.UpdateShareViaLinkOperation;
 import com.owncloud.android.services.OperationsService;
 import com.owncloud.android.services.OperationsService.OperationsServiceBinder;
+import com.owncloud.android.ui.asynctasks.LoadingVersionNumberTask;
 import com.owncloud.android.ui.dialog.ConfirmationDialogFragment;
 import com.owncloud.android.ui.dialog.LoadingDialog;
 import com.owncloud.android.ui.dialog.SslUntrustedCertDialog;
 import com.owncloud.android.ui.helpers.FileOperationsHelper;
+import com.owncloud.android.utils.DisplayUtils;
 import com.owncloud.android.utils.ErrorMessageAdapter;
+import com.owncloud.android.utils.FilesSyncHelper;
+
+import java.util.concurrent.ExecutionException;
 
 
 /**
@@ -80,8 +88,8 @@ public abstract class FileActivity extends DrawerActivity
 
     public static final String EXTRA_FILE = "com.owncloud.android.ui.activity.FILE";
     public static final String EXTRA_ACCOUNT = "com.owncloud.android.ui.activity.ACCOUNT";
-    public static final String EXTRA_FROM_NOTIFICATION =
-            "com.owncloud.android.ui.activity.FROM_NOTIFICATION";
+    public static final String EXTRA_FROM_NOTIFICATION = "com.owncloud.android.ui.activity.FROM_NOTIFICATION";
+    public static final String APP_OPENED_COUNT = "APP_OPENED_COUNT";
 
     public static final String TAG = FileActivity.class.getSimpleName();
 
@@ -156,9 +164,6 @@ public abstract class FileActivity extends DrawerActivity
             mFromNotification = getIntent().getBooleanExtra(FileActivity.EXTRA_FROM_NOTIFICATION,
                     false);
         }
-
-        AccountUtils.updateAccountVersion(this); // best place, before any access to AccountManager
-                                                 // or database
 
         setAccount(account, savedInstanceState != null);
 
@@ -310,10 +315,9 @@ public abstract class FileActivity extends DrawerActivity
             requestCredentialsUpdate(this);
 
             if (result.getCode() == ResultCode.UNAUTHORIZED) {
-                Toast t = Toast.makeText(this, ErrorMessageAdapter.getErrorCauseMessage(result,
-                        operation, getResources()),
-                    Toast.LENGTH_LONG);
-                t.show();
+                DisplayUtils.showSnackMessage(
+                        this, ErrorMessageAdapter.getErrorCauseMessage(result, operation, getResources())
+                );
             }
 
         } else if (!result.isSuccess() && ResultCode.SSL_RECOVERABLE_PEER_UNVERIFIED.equals(result.getCode())) {
@@ -331,10 +335,9 @@ public abstract class FileActivity extends DrawerActivity
                 updateFileFromDB();
 
             } else if (result.getCode() != ResultCode.CANCELLED) {
-                Toast t = Toast.makeText(this,
-                        ErrorMessageAdapter.getErrorCauseMessage(result, operation, getResources()),
-                        Toast.LENGTH_LONG);
-                t.show();
+                DisplayUtils.showSnackMessage(
+                        this, ErrorMessageAdapter.getErrorCauseMessage(result, operation, getResources())
+                );
             }
 
         } else if (operation instanceof SynchronizeFileOperation) {
@@ -345,10 +348,9 @@ public abstract class FileActivity extends DrawerActivity
                 updateFileFromDB();
 
             } else {
-                Toast t = Toast.makeText(this,
-                        ErrorMessageAdapter.getErrorCauseMessage(result, operation, getResources()),
-                        Toast.LENGTH_LONG);
-                t.show();
+                DisplayUtils.showSnackMessage(
+                        this, ErrorMessageAdapter.getErrorCauseMessage(result, operation, getResources())
+                );
             }
         }
     }
@@ -384,8 +386,7 @@ public abstract class FileActivity extends DrawerActivity
             }
             OwnCloudClient client;
             OwnCloudAccount ocAccount = new OwnCloudAccount(account, context);
-            client = (OwnCloudClientManagerFactory.getDefaultSingleton().
-                    removeClientFor(ocAccount));
+            client = (OwnCloudClientManagerFactory.getDefaultSingleton().removeClientFor(ocAccount));
             if (client != null) {
                 OwnCloudCredentials cred = client.getCredentials();
                 if (cred != null) {
@@ -411,7 +412,7 @@ public abstract class FileActivity extends DrawerActivity
             startActivityForResult(updateAccountCredentials, REQUEST_CODE__UPDATE_CREDENTIALS);
 
         } catch (com.owncloud.android.lib.common.accounts.AccountUtils.AccountNotFoundException e) {
-            Toast.makeText(context, R.string.auth_account_does_not_exist, Toast.LENGTH_SHORT).show();
+            DisplayUtils.showSnackMessage(this, R.string.auth_account_does_not_exist);
         }
 
     }
@@ -448,7 +449,7 @@ public abstract class FileActivity extends DrawerActivity
                         operation, getResources()), Toast.LENGTH_LONG);
                 msg.show();
             }
-            invalidateOptionsMenu();
+            supportInvalidateOptionsMenu();
         }
     }
 
@@ -471,7 +472,7 @@ public abstract class FileActivity extends DrawerActivity
         Fragment frag = getSupportFragmentManager().findFragmentByTag(DIALOG_WAIT_TAG);
         if (frag == null) {
             Log_OC.d(TAG, "show loading dialog");
-            LoadingDialog loading = new LoadingDialog(message);
+            LoadingDialog loading = LoadingDialog.newInstance(message);
             FragmentManager fm = getSupportFragmentManager();
             FragmentTransaction ft = fm.beginTransaction();
             loading.show(ft, DIALOG_WAIT_TAG);
@@ -549,9 +550,10 @@ public abstract class FileActivity extends DrawerActivity
     }
 
     @Override
-    public void restart(){
+    public void restart() {
         Intent i = new Intent(this, FileDisplayActivity.class);
         i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        i.setAction(FileDisplayActivity.RESTART);
         startActivity(i);
 
         fetchExternalLinks(false);
@@ -590,4 +592,51 @@ public abstract class FileActivity extends DrawerActivity
         // nothing to do
     }
 
+    public void checkForNewDevVersionNecessary(View view, Context context) {
+        if (getResources().getBoolean(R.bool.dev_version_direct_download_enabled)) {
+            ArbitraryDataProvider arbitraryDataProvider = new ArbitraryDataProvider(getContentResolver());
+            int count = arbitraryDataProvider.getIntegerValue(FilesSyncHelper.GLOBAL, APP_OPENED_COUNT);
+
+            if (count > 10 || count == -1) {
+                checkForNewDevVersion(view, context, false);
+            }
+        }
+    }
+
+    public static void checkForNewDevVersion(View view, Context context, boolean openDirectly) {
+        Integer latestVersion = -1;
+        Integer currentVersion = -1;
+        try {
+            currentVersion = context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionCode;
+            String url = context.getString(R.string.dev_latest);
+            LoadingVersionNumberTask loadTask = new LoadingVersionNumberTask();
+            loadTask.execute(url);
+            latestVersion = loadTask.get();
+        } catch (InterruptedException | ExecutionException | PackageManager.NameNotFoundException e) {
+            Log_OC.e(TAG, "Error detecting app version", e);
+        }
+        if (latestVersion == -1 || currentVersion == -1) {
+            Snackbar.make(view, R.string.dev_version_no_information_available, Snackbar.LENGTH_LONG).show();
+        }
+        if (latestVersion > currentVersion) {
+            if (openDirectly) {
+                String devApkLink = (String) context.getText(R.string.dev_link) + latestVersion + ".apk";
+                Uri uriUrl = Uri.parse(devApkLink);
+                Intent intent = new Intent(Intent.ACTION_VIEW, uriUrl);
+                context.startActivity(intent);
+            } else {
+                Integer finalLatestVersion = latestVersion;
+                Snackbar.make(view, R.string.dev_version_new_version_available, Snackbar.LENGTH_LONG)
+                        .setAction(context.getString(R.string.version_dev_download), v -> {
+                            String devApkLink = (String) context.getText(R.string.dev_link)
+                                    + finalLatestVersion + ".apk";
+                            Uri uriUrl = Uri.parse(devApkLink);
+                            Intent intent = new Intent(Intent.ACTION_VIEW, uriUrl);
+                            context.startActivity(intent);
+                        }).show();
+            }
+        } else {
+            Snackbar.make(view, R.string.dev_version_no_new_version_available, Snackbar.LENGTH_LONG).show();
+        }
+    }
 }

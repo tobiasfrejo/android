@@ -28,6 +28,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.graphics.BitmapFactory;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -54,11 +55,13 @@ import com.owncloud.android.lib.resources.files.FileUtils;
 import com.owncloud.android.operations.DownloadFileOperation;
 import com.owncloud.android.ui.activity.FileActivity;
 import com.owncloud.android.ui.activity.FileDisplayActivity;
+import com.owncloud.android.ui.dialog.SendShareDialog;
 import com.owncloud.android.ui.fragment.OCFileListFragment;
 import com.owncloud.android.ui.notifications.NotificationUtils;
 import com.owncloud.android.ui.preview.PreviewImageActivity;
 import com.owncloud.android.ui.preview.PreviewImageFragment;
 import com.owncloud.android.utils.ErrorMessageAdapter;
+import com.owncloud.android.utils.ThemeUtils;
 
 import java.io.File;
 import java.util.AbstractList;
@@ -118,16 +121,24 @@ public class FileDownloader extends Service
         super.onCreate();
         Log_OC.d(TAG, "Creating service");
         mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        HandlerThread thread = new HandlerThread("FileDownloaderThread",
-                Process.THREAD_PRIORITY_BACKGROUND);
+        HandlerThread thread = new HandlerThread("FileDownloaderThread", Process.THREAD_PRIORITY_BACKGROUND);
         thread.start();
         mServiceLooper = thread.getLooper();
         mServiceHandler = new ServiceHandler(mServiceLooper, this);
         mBinder = new FileDownloaderBinder();
 
-        mNotification = new NotificationCompat.Builder(this).setContentTitle(getApplicationContext().
-                getResources().getString(R.string.app_name))
-                .build();
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this).setContentTitle(
+                getApplicationContext().getResources().getString(R.string.app_name))
+                .setContentText(getApplicationContext().getResources().getString(R.string.foreground_service_download))
+                .setSmallIcon(R.drawable.notification_icon)
+                .setLargeIcon(BitmapFactory.decodeResource(getResources(), R.drawable.notification_icon))
+                .setColor(ThemeUtils.primaryColor(getApplicationContext()));
+
+        if ((android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O)) {
+            builder.setChannelId(NotificationUtils.NOTIFICATION_CHANNEL_DOWNLOAD);
+        }
+
+        mNotification = builder.build();
 
         // add AccountsUpdatedListener
         AccountManager am = AccountManager.get(getApplicationContext());
@@ -167,18 +178,19 @@ public class FileDownloader extends Service
 
         startForeground(FOREGROUND_SERVICE_ID, mNotification);
 
-        if (!intent.hasExtra(EXTRA_ACCOUNT) ||
-                !intent.hasExtra(EXTRA_FILE)
-                ) {
+        if (!intent.hasExtra(EXTRA_ACCOUNT) || !intent.hasExtra(EXTRA_FILE)) {
             Log_OC.e(TAG, "Not enough information provided in intent");
             return START_NOT_STICKY;
         } else {
             final Account account = intent.getParcelableExtra(EXTRA_ACCOUNT);
             final OCFile file = intent.getParcelableExtra(EXTRA_FILE);
             final String behaviour = intent.getStringExtra(OCFileListFragment.DOWNLOAD_BEHAVIOUR);
+            String activityName = intent.getStringExtra(SendShareDialog.ACTIVITY_NAME);
+            String packageName = intent.getStringExtra(SendShareDialog.PACKAGE_NAME);
             AbstractList<String> requestedDownloads = new Vector<String>();
             try {
-                DownloadFileOperation newDownload = new DownloadFileOperation(account, file, behaviour);
+                DownloadFileOperation newDownload = new DownloadFileOperation(account, file, behaviour, activityName,
+                        packageName, getBaseContext());
                 newDownload.addDatatransferProgressListener(this);
                 newDownload.addDatatransferProgressListener((FileDownloaderBinder) mBinder);
                 Pair<String, String> putResult = mPendingDownloads.putIfAbsent(
@@ -440,7 +452,7 @@ public class FileDownloader extends Service
 
 
                     /// perform the download
-                    downloadResult = mCurrentDownload.execute(mDownloadClient);
+                    downloadResult = mCurrentDownload.execute(mDownloadClient, mCurrentDownload.getFile().isEncrypted());
                     if (downloadResult.isSuccess()) {
                         saveDownloadedFile();
                     }
@@ -504,8 +516,7 @@ public class FileDownloader extends Service
     private void notifyDownloadStart(DownloadFileOperation download) {
         /// create status notification with a progress bar
         mLastPercent = 0;
-        mNotificationBuilder =
-                NotificationUtils.newNotificationBuilder(this);
+        mNotificationBuilder = NotificationUtils.newNotificationBuilder(this);
         mNotificationBuilder
                 .setSmallIcon(R.drawable.notification_icon)
                 .setTicker(getString(R.string.downloader_download_in_progress_ticker))
@@ -517,6 +528,10 @@ public class FileDownloader extends Service
                                 new File(download.getSavePath()).getName())
                 );
 
+        if ((android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O)) {
+            mNotificationBuilder.setChannelId(NotificationUtils.NOTIFICATION_CHANNEL_DOWNLOAD);
+        }
+        
         /// includes a pending intent in the notification showing the details view of the file
         Intent showDetailsIntent = null;
         if (PreviewImageFragment.canBePreviewed(download.getFile())) {
@@ -528,11 +543,16 @@ public class FileDownloader extends Service
         showDetailsIntent.putExtra(FileActivity.EXTRA_ACCOUNT, download.getAccount());
         showDetailsIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
 
-        mNotificationBuilder.setContentIntent(PendingIntent.getActivity(
-                this, (int) System.currentTimeMillis(), showDetailsIntent, 0
-        ));
+        mNotificationBuilder.setContentIntent(PendingIntent.getActivity(this, (int) System.currentTimeMillis(),
+                showDetailsIntent, 0));
 
-        mNotificationManager.notify(R.string.downloader_download_in_progress_ticker, mNotificationBuilder.build());
+
+        if (mNotificationManager == null) {
+            mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        }
+        if (mNotificationManager != null) {
+            mNotificationManager.notify(R.string.downloader_download_in_progress_ticker, mNotificationBuilder.build());
+        }
     }
 
 
@@ -548,7 +568,15 @@ public class FileDownloader extends Service
             String fileName = filePath.substring(filePath.lastIndexOf(FileUtils.PATH_SEPARATOR) + 1);
             String text = String.format(getString(R.string.downloader_download_in_progress_content), percent, fileName);
             mNotificationBuilder.setContentText(text);
-            mNotificationManager.notify(R.string.downloader_download_in_progress_ticker, mNotificationBuilder.build());
+
+            if (mNotificationManager == null) {
+                mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            }
+            
+            if (mNotificationManager != null) {
+                mNotificationManager.notify(R.string.downloader_download_in_progress_ticker,
+                        mNotificationBuilder.build());
+            }
         }
         mLastPercent = percent;
     }
@@ -562,7 +590,13 @@ public class FileDownloader extends Service
      */
     private void notifyDownloadResult(DownloadFileOperation download,
                                       RemoteOperationResult downloadResult) {
-        mNotificationManager.cancel(R.string.downloader_download_in_progress_ticker);
+        if (mNotificationManager == null) {
+            mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        }
+
+        if (mNotificationManager != null) {
+            mNotificationManager.cancel(R.string.downloader_download_in_progress_ticker);
+        }
         if (!downloadResult.isCancelled()) {
             int tickerId = (downloadResult.isSuccess()) ? R.string.downloader_download_succeeded_ticker :
                     R.string.downloader_download_failed_ticker;
@@ -591,34 +625,28 @@ public class FileDownloader extends Service
                 updateAccountCredentials.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 updateAccountCredentials.addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
                 updateAccountCredentials.addFlags(Intent.FLAG_FROM_BACKGROUND);
-                mNotificationBuilder
-                        .setContentIntent(PendingIntent.getActivity(
-                                this, (int) System.currentTimeMillis(), updateAccountCredentials,
-                                PendingIntent.FLAG_ONE_SHOT));
-
+                mNotificationBuilder.setContentIntent(PendingIntent.getActivity(this, (int) System.currentTimeMillis(),
+                        updateAccountCredentials, PendingIntent.FLAG_ONE_SHOT));
             } else {
                 // TODO put something smart in showDetailsIntent
                 Intent showDetailsIntent = new Intent();
-                mNotificationBuilder
-                        .setContentIntent(PendingIntent.getActivity(
-                                this, (int) System.currentTimeMillis(), showDetailsIntent, 0));
+                mNotificationBuilder.setContentIntent(PendingIntent.getActivity(this, (int) System.currentTimeMillis(),
+                        showDetailsIntent, 0));
             }
 
-            mNotificationBuilder.setContentText(
-                    ErrorMessageAdapter.getErrorCauseMessage(downloadResult, download,
-                            getResources())
-            );
-            mNotificationManager.notify(tickerId, mNotificationBuilder.build());
+            mNotificationBuilder.setContentText(ErrorMessageAdapter.getErrorCauseMessage(downloadResult,
+                    download, getResources()));
 
-            // Remove success notification
-            if (downloadResult.isSuccess()) {
-                // Sleep 2 seconds, so show the notification before remove it
-                NotificationUtils.cancelWithDelay(
-                        mNotificationManager,
-                        R.string.downloader_download_succeeded_ticker,
-                        2000);
+            if (mNotificationManager != null) {
+                mNotificationManager.notify(tickerId, mNotificationBuilder.build());
+
+                // Remove success notification
+                if (downloadResult.isSuccess()) {
+                    // Sleep 2 seconds, so show the notification before remove it
+                    NotificationUtils.cancelWithDelay(mNotificationManager,
+                            R.string.downloader_download_succeeded_ticker, 2000);
+                }
             }
-
         }
     }
 
@@ -642,6 +670,8 @@ public class FileDownloader extends Service
         end.putExtra(EXTRA_REMOTE_PATH, download.getRemotePath());
         end.putExtra(EXTRA_FILE_PATH, download.getSavePath());
         end.putExtra(OCFileListFragment.DOWNLOAD_BEHAVIOUR, download.getBehaviour());
+        end.putExtra(SendShareDialog.ACTIVITY_NAME, download.getActivityName());
+        end.putExtra(SendShareDialog.PACKAGE_NAME, download.getPackageName());
         if (unlinkedFromRemotePath != null) {
             end.putExtra(EXTRA_LINKED_TO_PATH, unlinkedFromRemotePath);
         }

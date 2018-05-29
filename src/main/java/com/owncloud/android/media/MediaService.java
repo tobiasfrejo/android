@@ -34,7 +34,7 @@ import android.net.wifi.WifiManager;
 import android.net.wifi.WifiManager.WifiLock;
 import android.os.IBinder;
 import android.os.PowerManager;
-import android.support.v7.app.NotificationCompat;
+import android.support.v4.app.NotificationCompat;
 import android.widget.Toast;
 
 import com.owncloud.android.R;
@@ -42,6 +42,8 @@ import com.owncloud.android.datamodel.OCFile;
 import com.owncloud.android.lib.common.utils.Log_OC;
 import com.owncloud.android.ui.activity.FileActivity;
 import com.owncloud.android.ui.activity.FileDisplayActivity;
+import com.owncloud.android.ui.notifications.NotificationUtils;
+import com.owncloud.android.utils.ThemeUtils;
 
 import java.io.IOException;
 
@@ -110,10 +112,6 @@ public class MediaService extends Service implements OnCompletionListener, OnPre
 
     /** Current focus state */
     private AudioFocus mAudioFocus = AudioFocus.NO_FOCUS;
-
-
-    /** 'True' when the current song is streaming from the network */
-    private boolean mIsStreaming = false;
 
     /** Wifi lock kept to prevents the device from shutting off the radio when streaming a file. */
     private WifiLock mWifiLock;
@@ -223,12 +221,12 @@ public class MediaService extends Service implements OnCompletionListener, OnPre
         super.onCreate();
         Log_OC.d(TAG, "Creating ownCloud media service");
 
-        mWifiLock = ((WifiManager) getSystemService(Context.WIFI_SERVICE)).
+        mWifiLock = ((WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE)).
                 createWifiLock(WifiManager.WIFI_MODE_FULL, MEDIA_WIFI_LOCK_TAG);
 
         mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         mNotificationBuilder = new NotificationCompat.Builder(this);
-        mNotificationBuilder.setColor(this.getResources().getColor(R.color.primary));
+        mNotificationBuilder.setColor(ThemeUtils.primaryColor(this));
         mAudioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
         mBinder = new MediaServiceBinder(this);
     }
@@ -446,14 +444,14 @@ public class MediaService extends Service implements OnCompletionListener, OnPre
             createMediaPlayerIfNeeded();
             mPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
             String url = mFile.getStoragePath();
+
             /* Streaming is not possible right now
             if (url == null || url.length() <= 0) {
                 url = AccountUtils.constructFullURLForAccount(this, mAccount) + mFile.getRemotePath();
             }
             mIsStreaming = url.startsWith("http:") || url.startsWith("https:");
             */
-            mIsStreaming = false;
-
+            //mIsStreaming = false;
             mPlayer.setDataSource(url);
 
             mState = State.PREPARING;
@@ -463,9 +461,12 @@ public class MediaService extends Service implements OnCompletionListener, OnPre
             mPlayer.prepareAsync();
 
             // prevent the Wifi from going to sleep when streaming
+            /*
             if (mIsStreaming) {
                 mWifiLock.acquire();
-            } else if (mWifiLock.isHeld()) {
+            } else
+            */
+            if (mWifiLock.isHeld()) {
                 mWifiLock.release();
             }
 
@@ -498,7 +499,7 @@ public class MediaService extends Service implements OnCompletionListener, OnPre
 
     /** Called when media player is done playing current song. */
     public void onCompletion(MediaPlayer player) {
-        Toast.makeText(this, String.format(getString(R.string.media_event_done, mFile.getFileName())), Toast.LENGTH_LONG).show();
+        Toast.makeText(this, String.format(getString(R.string.media_event_done), mFile.getFileName()), Toast.LENGTH_LONG).show();
         if (mMediaController != null) {
             // somebody is still bound to the service
             player.seekTo(0);
@@ -555,6 +556,10 @@ public class MediaService extends Service implements OnCompletionListener, OnPre
         mNotificationBuilder.setContentTitle(ticker);
         mNotificationBuilder.setContentText(content);
 
+        if ((android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O)) {
+            mNotificationBuilder.setChannelId(NotificationUtils.NOTIFICATION_CHANNEL_MEDIA);
+        }
+
         mNotificationManager.notify(R.string.media_notif_ticker, mNotificationBuilder.build());
     }
 
@@ -587,6 +592,10 @@ public class MediaService extends Service implements OnCompletionListener, OnPre
                 PendingIntent.FLAG_UPDATE_CURRENT));
         mNotificationBuilder.setContentTitle(ticker);
         mNotificationBuilder.setContentText(content);
+
+        if ((android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O)) {
+            mNotificationBuilder.setChannelId(NotificationUtils.NOTIFICATION_CHANNEL_MEDIA);
+        }
 
         startForeground(R.string.media_notif_ticker, mNotificationBuilder.build());
     }

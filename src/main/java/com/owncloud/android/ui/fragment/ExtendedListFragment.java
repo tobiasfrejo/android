@@ -1,20 +1,20 @@
-/**
+/*
  * ownCloud Android client application
  *
  * @author Mario Danic
  * Copyright (C) 2017 Mario Danic
  * Copyright (C) 2012 Bartek Przybylski
  * Copyright (C) 2012-2016 ownCloud Inc.
- * <p>
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2,
  * as published by the Free Software Foundation.
- * <p>
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * <p>
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -23,15 +23,21 @@ package com.owncloud.android.ui.fragment;
 
 import android.animation.LayoutTransition;
 import android.app.Activity;
+import android.content.res.Configuration;
+import android.graphics.PorterDuff;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.support.annotation.DrawableRes;
 import android.support.annotation.StringRes;
 import android.support.design.widget.BottomNavigationView;
+import android.support.design.widget.FloatingActionButton;
 import android.support.v4.app.Fragment;
 import android.support.v4.view.MenuItemCompat;
 import android.support.v4.widget.SwipeRefreshLayout;
+import android.support.v7.widget.GridLayoutManager;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.SearchView;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
@@ -39,13 +45,13 @@ import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
-import android.widget.AbsListView;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
-import android.widget.BaseAdapter;
 import android.widget.GridView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -53,31 +59,26 @@ import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
-import com.getbase.floatingactionbutton.FloatingActionButton;
-import com.getbase.floatingactionbutton.FloatingActionsMenu;
 import com.owncloud.android.MainApp;
 import com.owncloud.android.R;
 import com.owncloud.android.authentication.AccountUtils;
+import com.owncloud.android.db.PreferenceManager;
 import com.owncloud.android.lib.common.utils.Log_OC;
 import com.owncloud.android.lib.resources.files.SearchOperation;
-import com.owncloud.android.ui.ExtendedListView;
+import com.owncloud.android.ui.EmptyRecyclerView;
 import com.owncloud.android.ui.activity.FileDisplayActivity;
 import com.owncloud.android.ui.activity.FolderPickerActivity;
 import com.owncloud.android.ui.activity.OnEnforceableRefreshListener;
 import com.owncloud.android.ui.activity.UploadFilesActivity;
-import com.owncloud.android.ui.adapter.FileListListAdapter;
 import com.owncloud.android.ui.adapter.LocalFileListAdapter;
+import com.owncloud.android.ui.adapter.OCFileListAdapter;
 import com.owncloud.android.ui.events.SearchEvent;
-import com.owncloud.android.utils.DisplayUtils;
+import com.owncloud.android.utils.ThemeUtils;
 
 import org.greenrobot.eventbus.EventBus;
 import org.parceler.Parcel;
 
 import java.util.ArrayList;
-
-import third_parties.in.srain.cube.GridViewWithHeaderAndFooter;
-
-import static android.content.res.Configuration.ORIENTATION_LANDSCAPE;
 
 public class ExtendedListFragment extends Fragment
         implements OnItemClickListener, OnEnforceableRefreshListener, SearchView.OnQueryTextListener {
@@ -92,20 +93,21 @@ public class ExtendedListFragment extends Fragment
     private static final String KEY_HEIGHT_CELL = "HEIGHT_CELL";
     private static final String KEY_EMPTY_LIST_MESSAGE = "EMPTY_LIST_MESSAGE";
     private static final String KEY_IS_GRID_VISIBLE = "IS_GRID_VISIBLE";
+    public static final float minColumnSize = 2.0f;
 
+    private int maxColumnSize = 5;
+    private int maxColumnSizePortrait = 5;
+    private int maxColumnSizeLandscape = 10;
+
+    private ScaleGestureDetector mScaleGestureDetector = null;
     protected SwipeRefreshLayout mRefreshListLayout;
-    protected SwipeRefreshLayout mRefreshGridLayout;
-    protected SwipeRefreshLayout mRefreshEmptyLayout;
     protected LinearLayout mEmptyListContainer;
     protected TextView mEmptyListMessage;
     protected TextView mEmptyListHeadline;
     protected ImageView mEmptyListIcon;
     protected ProgressBar mEmptyListProgress;
 
-    private FloatingActionsMenu mFabMain;
-    private FloatingActionButton mFabUpload;
-    private FloatingActionButton mFabMkdir;
-    private FloatingActionButton mFabUploadFromApp;
+    private FloatingActionButton mFabMain;
 
     // Save the state of the scroll in browsing
     private ArrayList<Integer> mIndexes;
@@ -115,16 +117,12 @@ public class ExtendedListFragment extends Fragment
 
     private SwipeRefreshLayout.OnRefreshListener mOnRefreshListener = null;
 
-    protected AbsListView mCurrentListView;
-    private ExtendedListView mListView;
-    private View mListFooterView;
-    private GridViewWithHeaderAndFooter mGridView;
-    private View mGridFooterView;
-
-    private BaseAdapter mAdapter;
+    private EmptyRecyclerView mRecyclerView;
 
     protected SearchView searchView;
     private Handler handler = new Handler();
+
+    private float mScale = -1f;
 
     @Parcel
     public enum SearchType {
@@ -145,54 +143,32 @@ public class ExtendedListFragment extends Fragment
         SHARED_FILTER
     }
 
-    protected void setListAdapter(BaseAdapter listAdapter) {
-        mAdapter = listAdapter;
-        mCurrentListView.setAdapter(listAdapter);
-        mCurrentListView.invalidateViews();
+    protected void setRecyclerViewAdapter(RecyclerView.Adapter recyclerViewAdapter) {
+        mRecyclerView.setAdapter(recyclerViewAdapter);
     }
 
-    protected AbsListView getListView() {
-        return mCurrentListView;
+    protected RecyclerView getRecyclerView() {
+        return mRecyclerView;
     }
 
-    public FloatingActionButton getFabUpload() {
-        return mFabUpload;
-    }
-
-    public FloatingActionButton getFabUploadFromApp() {
-        return mFabUploadFromApp;
-    }
-
-    public FloatingActionButton getFabMkdir() {
-        return mFabMkdir;
-    }
-
-    public FloatingActionsMenu getFabMain() {
+    public FloatingActionButton getFabMain() {
         return mFabMain;
     }
 
     public void switchToGridView() {
         if (!isGridEnabled()) {
-            mListView.setAdapter(null);
-            mRefreshListLayout.setVisibility(View.GONE);
-            mRefreshGridLayout.setVisibility(View.VISIBLE);
-            mCurrentListView = mGridView;
-            setListAdapter(mAdapter);
+            getRecyclerView().setLayoutManager(new GridLayoutManager(getContext(), getColumnSize()));
         }
     }
 
     public void switchToListView() {
         if (isGridEnabled()) {
-            mGridView.setAdapter(null);
-            mRefreshGridLayout.setVisibility(View.GONE);
-            mRefreshListLayout.setVisibility(View.VISIBLE);
-            mCurrentListView = mListView;
-            setListAdapter(mAdapter);
+            getRecyclerView().setLayoutManager(new LinearLayoutManager(getContext()));
         }
     }
 
     public boolean isGridEnabled() {
-        return (mCurrentListView != null && mCurrentListView.equals(mGridView));
+        return getRecyclerView().getLayoutManager() instanceof GridLayoutManager;
     }
 
     @Override
@@ -208,7 +184,7 @@ public class ExtendedListFragment extends Fragment
         if ((activity = getActivity()) != null) {
             activity.getWindowManager().getDefaultDisplay().getMetrics(displaymetrics);
             int width = displaymetrics.widthPixels;
-            if (getResources().getConfiguration().orientation == ORIENTATION_LANDSCAPE) {
+            if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
                 searchView.setMaxWidth((int) (width * 0.4));
             } else {
                 if (activity instanceof FolderPickerActivity) {
@@ -222,9 +198,6 @@ public class ExtendedListFragment extends Fragment
         searchView.setOnQueryTextFocusChangeListener(new View.OnFocusChangeListener() {
             @Override
             public void onFocusChange(View v, final boolean hasFocus) {
-                if (hasFocus) {
-                    mFabMain.collapse();
-                }
 
                 handler.postDelayed(new Runnable() {
                     @Override
@@ -236,7 +209,7 @@ public class ExtendedListFragment extends Fragment
                                     getCurrentOwnCloudAccount(MainApp.getAppContext()));
 
                             if (getResources().getBoolean(R.bool.bottom_toolbar_enabled) && searchSupported) {
-                                BottomNavigationView bottomNavigationView = (BottomNavigationView) getActivity().
+                                BottomNavigationView bottomNavigationView = getActivity().
                                         findViewById(R.id.bottom_navigation_view);
                                 if (hasFocus) {
                                     bottomNavigationView.setVisibility(View.GONE);
@@ -277,8 +250,17 @@ public class ExtendedListFragment extends Fragment
             }
         });
 
+        int fontColor = ThemeUtils.fontColor(getContext());
 
-        LinearLayout searchBar = (LinearLayout) searchView.findViewById(R.id.search_bar);
+        LinearLayout searchBar = searchView.findViewById(R.id.search_bar);
+        TextView searchBadge = searchView.findViewById(R.id.search_badge);
+
+        searchBadge.setTextColor(fontColor);
+        searchBadge.setHintTextColor(fontColor);
+
+        ImageView searchButton = searchView.findViewById(R.id.search_button);
+        searchButton.setImageDrawable(ThemeUtils.tintDrawable(R.drawable.ic_search, fontColor));
+
         searchBar.setLayoutTransition(new LayoutTransition());
     }
 
@@ -301,15 +283,16 @@ public class ExtendedListFragment extends Fragment
     private void performSearch(final String query, boolean isSubmit) {
         handler.removeCallbacksAndMessages(null);
 
-        if (!TextUtils.isEmpty(query)) {
+        RecyclerView.Adapter adapter = getRecyclerView().getAdapter();
 
+        if (!TextUtils.isEmpty(query)) {
             int delay = 500;
 
             if (isSubmit) {
                 delay = 0;
             }
 
-            if (mAdapter != null && mAdapter instanceof FileListListAdapter) {
+            if (adapter != null && adapter instanceof OCFileListAdapter) {
                 handler.postDelayed(new Runnable() {
                     @Override
                     public void run() {
@@ -318,16 +301,16 @@ public class ExtendedListFragment extends Fragment
                             EventBus.getDefault().post(new SearchEvent(query, SearchOperation.SearchType.FILE_SEARCH,
                                     SearchEvent.UnsetType.NO_UNSET));
                         } else {
-                            FileListListAdapter fileListListAdapter = (FileListListAdapter) mAdapter;
+                            OCFileListAdapter fileListListAdapter = (OCFileListAdapter) adapter;
                             fileListListAdapter.getFilter().filter(query);
                         }
                     }
                 }, delay);
-            } else if (mAdapter != null && mAdapter instanceof LocalFileListAdapter) {
+            } else if (adapter != null && adapter instanceof LocalFileListAdapter) {
                 handler.postDelayed(new Runnable() {
                     @Override
                     public void run() {
-                        LocalFileListAdapter localFileListAdapter = (LocalFileListAdapter) mAdapter;
+                        LocalFileListAdapter localFileListAdapter = (LocalFileListAdapter) adapter;
                         localFileListAdapter.filter(query);
                     }
                 }, delay);
@@ -344,52 +327,50 @@ public class ExtendedListFragment extends Fragment
                     fileDisplayActivity.resetSearchView();
                     fileDisplayActivity.refreshListOfFilesFragment(true);
                 } else if (activity instanceof UploadFilesActivity) {
-                    LocalFileListAdapter localFileListAdapter = (LocalFileListAdapter) mAdapter;
+                    LocalFileListAdapter localFileListAdapter = (LocalFileListAdapter) adapter;
                     localFileListAdapter.filter(query);
                 } else if (activity instanceof FolderPickerActivity) {
                     ((FolderPickerActivity) activity).refreshListOfFilesFragment(true);
                 }
-
             }
         }
-
     }
 
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         Log_OC.d(TAG, "onCreateView");
 
         View v = inflater.inflate(R.layout.list_fragment, null);
         setupEmptyList(v);
 
-        mListView = (ExtendedListView) (v.findViewById(R.id.list_root));
-        mListView.setOnItemClickListener(this);
-        mListFooterView = inflater.inflate(R.layout.list_footer, null, false);
+        mRecyclerView = v.findViewById(R.id.list_root);
+        mRecyclerView.setHasFooter(true);
+        mRecyclerView.setEmptyView(v.findViewById(R.id.empty_list_view));
+        mRecyclerView.setHasFixedSize(true);
+        mRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
 
-        mGridView = (GridViewWithHeaderAndFooter) (v.findViewById(R.id.grid_root));
-        mGridView.setNumColumns(GridView.AUTO_FIT);
-        mGridView.setOnItemClickListener(this);
+        mScale = PreferenceManager.getGridColumns(getContext());
+        setGridViewColumns(1f);
 
-        mGridFooterView = inflater.inflate(R.layout.list_footer, null, false);
+        mScaleGestureDetector = new ScaleGestureDetector(MainApp.getAppContext(),new ScaleListener());
+
+        getRecyclerView().setOnTouchListener((view, motionEvent) -> {
+            mScaleGestureDetector.onTouchEvent(motionEvent);
+
+            if (motionEvent.getAction() == MotionEvent.ACTION_UP) {
+                view.performClick();
+            }
+
+            return false;
+        });
 
         // Pull-down to refresh layout
-        mRefreshListLayout = (SwipeRefreshLayout) v.findViewById(R.id.swipe_containing_list);
-        mRefreshGridLayout = (SwipeRefreshLayout) v.findViewById(R.id.swipe_containing_grid);
-        mRefreshEmptyLayout = (SwipeRefreshLayout) v.findViewById(R.id.swipe_containing_empty);
-
+        mRefreshListLayout = v.findViewById(R.id.swipe_containing_list);
         onCreateSwipeToRefresh(mRefreshListLayout);
-        onCreateSwipeToRefresh(mRefreshGridLayout);
-        onCreateSwipeToRefresh(mRefreshEmptyLayout);
 
-        mListView.setEmptyView(mRefreshEmptyLayout);
-        mGridView.setEmptyView(mRefreshEmptyLayout);
-
-        mFabMain = (FloatingActionsMenu) v.findViewById(R.id.fab_main);
-        mFabUpload = (FloatingActionButton) v.findViewById(R.id.fab_upload);
-        mFabMkdir = (FloatingActionButton) v.findViewById(R.id.fab_mkdir);
-        mFabUploadFromApp = (FloatingActionButton) v.findViewById(R.id.fab_upload_from_app);
+        mFabMain = v.findViewById(R.id.fab_main);
+        ThemeUtils.tintFloatingActionButton(mFabMain, R.drawable.ic_plus, getContext());
 
         boolean searchSupported = AccountUtils.hasSearchSupport(AccountUtils.
                 getCurrentOwnCloudAccount(MainApp.getAppContext()));
@@ -398,44 +379,52 @@ public class ExtendedListFragment extends Fragment
             RelativeLayout.LayoutParams layoutParams = (RelativeLayout.LayoutParams) mFabMain.getLayoutParams();
             final float scale = v.getResources().getDisplayMetrics().density;
 
-            BottomNavigationView bottomNavigationView = (BottomNavigationView)
-                    v.findViewById(R.id.bottom_navigation_view);
+            BottomNavigationView bottomNavigationView = v.findViewById(R.id.bottom_navigation_view);
 
             // convert the DP into pixel
             int pixel = (int) (32 * scale + 0.5f);
             layoutParams.setMargins(0, 0, pixel / 2, bottomNavigationView.getMeasuredHeight() + pixel * 2);
         }
 
-        mCurrentListView = mListView;   // list by default
-        if (savedInstanceState != null) {
-
-
-            if (savedInstanceState.getBoolean(KEY_IS_GRID_VISIBLE, false)) {
-                switchToGridView();
-            }
-            int referencePosition = savedInstanceState.getInt(KEY_SAVED_LIST_POSITION);
-            if (isGridEnabled()) {
-                Log_OC.v(TAG, "Setting grid position " + referencePosition);
-                mGridView.setSelection(referencePosition);
-            } else {
-                Log_OC.v(TAG, "Setting and centering around list position " + referencePosition);
-                mListView.setAndCenterSelection(referencePosition);
-            }
-        }
-
         return v;
     }
 
-    public void setEmptyListVisible() {
-        mEmptyListContainer.setVisibility(View.VISIBLE);
+    private class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
+        @Override
+        public boolean onScale(ScaleGestureDetector detector) {
+            setGridViewColumns(detector.getScaleFactor());
+
+            PreferenceManager.setGridColumns(getContext(), mScale);
+
+            getRecyclerView().getAdapter().notifyDataSetChanged();
+
+            return true;
+        }
+    }
+
+    private void setGridViewColumns(float scaleFactor) {
+        if (mRecyclerView.getLayoutManager() instanceof GridLayoutManager) {
+            GridLayoutManager gridLayoutManager = (GridLayoutManager) mRecyclerView.getLayoutManager();
+            if (mScale == -1f) {
+                gridLayoutManager.setSpanCount(GridView.AUTO_FIT);
+                mScale = gridLayoutManager.getSpanCount();
+            }
+            mScale *= 1.f - (scaleFactor - 1.f);
+            mScale = Math.max(minColumnSize, Math.min(mScale, maxColumnSize));
+            Integer scaleInt = Math.round(mScale);
+            gridLayoutManager.setSpanCount(scaleInt);
+            mRecyclerView.getAdapter().notifyDataSetChanged();
+        }
     }
 
     protected void setupEmptyList(View view) {
-        mEmptyListContainer = (LinearLayout) view.findViewById(R.id.empty_list_view);
-        mEmptyListMessage = (TextView) view.findViewById(R.id.empty_list_view_text);
-        mEmptyListHeadline = (TextView) view.findViewById(R.id.empty_list_view_headline);
-        mEmptyListIcon = (ImageView) view.findViewById(R.id.empty_list_icon);
-        mEmptyListProgress = (ProgressBar) view.findViewById(R.id.empty_list_progress);
+        mEmptyListContainer = view.findViewById(R.id.empty_list_view);
+        mEmptyListMessage = view.findViewById(R.id.empty_list_view_text);
+        mEmptyListHeadline = view.findViewById(R.id.empty_list_view_headline);
+        mEmptyListIcon = view.findViewById(R.id.empty_list_icon);
+        mEmptyListProgress = view.findViewById(R.id.empty_list_progress);
+        mEmptyListProgress.getIndeterminateDrawable().setColorFilter(ThemeUtils.primaryColor(getContext()),
+                PorterDuff.Mode.SRC_IN);
     }
 
     /**
@@ -451,12 +440,22 @@ public class ExtendedListFragment extends Fragment
             mTops = savedInstanceState.getIntegerArrayList(KEY_TOPS);
             mHeightCell = savedInstanceState.getInt(KEY_HEIGHT_CELL);
             setMessageForEmptyList(savedInstanceState.getString(KEY_EMPTY_LIST_MESSAGE));
+
+            if (savedInstanceState.getBoolean(KEY_IS_GRID_VISIBLE, false) && getRecyclerView().getAdapter() != null) {
+                switchToGridView();
+            }
+
+            int referencePosition = savedInstanceState.getInt(KEY_SAVED_LIST_POSITION);
+            Log_OC.v(TAG, "Setting grid position " + referencePosition);
+            scrollToPosition(referencePosition);
         } else {
             mIndexes = new ArrayList<>();
             mFirstPositions = new ArrayList<>();
             mTops = new ArrayList<>();
             mHeightCell = 0;
         }
+
+        mScale = PreferenceManager.getGridColumns(getContext());
     }
 
 
@@ -465,34 +464,18 @@ public class ExtendedListFragment extends Fragment
         super.onSaveInstanceState(savedInstanceState);
         Log_OC.d(TAG, "onSaveInstanceState()");
         savedInstanceState.putBoolean(KEY_IS_GRID_VISIBLE, isGridEnabled());
-        savedInstanceState.putInt(KEY_SAVED_LIST_POSITION, getReferencePosition());
         savedInstanceState.putIntegerArrayList(KEY_INDEXES, mIndexes);
         savedInstanceState.putIntegerArrayList(KEY_FIRST_POSITIONS, mFirstPositions);
         savedInstanceState.putIntegerArrayList(KEY_TOPS, mTops);
         savedInstanceState.putInt(KEY_HEIGHT_CELL, mHeightCell);
         savedInstanceState.putString(KEY_EMPTY_LIST_MESSAGE, getEmptyViewText());
+
+        PreferenceManager.setGridColumns(getContext(), mScale);
     }
 
-    /**
-     * Calculates the position of the item that will be used as a reference to
-     * reposition the visible items in the list when the device is turned to
-     * other position.
-     * <p>
-     * The current policy is take as a reference the visible item in the center
-     * of the screen.
-     *
-     * @return The position in the list of the visible item in the center of the
-     * screen.
-     */
-    protected int getReferencePosition() {
-        if (mCurrentListView != null) {
-            return (mCurrentListView.getFirstVisiblePosition() +
-                    mCurrentListView.getLastVisiblePosition()) / 2;
-        } else {
-            return 0;
-        }
+    public int getColumnSize() {
+        return Math.round(mScale);
     }
-
 
     /*
      * Restore index and position
@@ -508,23 +491,17 @@ public class ExtendedListFragment extends Fragment
             Log_OC.v(TAG, "Setting selection to position: " + firstPosition + "; top: "
                     + top + "; index: " + index);
 
-            if (mCurrentListView != null && mCurrentListView.equals(mListView)) {
-                if (mHeightCell * index <= mListView.getHeight()) {
-                    mListView.setSelectionFromTop(firstPosition, top);
-                } else {
-                    mListView.setSelectionFromTop(index, 0);
-                }
+            scrollToPosition(firstPosition);
+        }
+    }
 
-            } else {
-                if (mHeightCell * index <= mGridView.getHeight()) {
-                    mGridView.setSelection(firstPosition);
-                    //mGridView.smoothScrollToPosition(firstPosition);
-                } else {
-                    mGridView.setSelection(index);
-                    //mGridView.smoothScrollToPosition(index);
-                }
-            }
+    private void scrollToPosition(int position) {
+        LinearLayoutManager linearLayoutManager = (LinearLayoutManager) mRecyclerView.getLayoutManager();
 
+        if (mRecyclerView != null) {
+            int visibleItemCount = linearLayoutManager.findLastCompletelyVisibleItemPosition() -
+                    linearLayoutManager.findFirstCompletelyVisibleItemPosition();
+            linearLayoutManager.scrollToPositionWithOffset(position, (visibleItemCount / 2) * mHeightCell);
         }
     }
 
@@ -535,10 +512,17 @@ public class ExtendedListFragment extends Fragment
 
         mIndexes.add(index);
 
-        int firstPosition = mCurrentListView.getFirstVisiblePosition();
+        RecyclerView.LayoutManager layoutManager = mRecyclerView.getLayoutManager();
+        int firstPosition;
+        if (layoutManager instanceof GridLayoutManager) {
+            firstPosition = ((GridLayoutManager) layoutManager).findFirstCompletelyVisibleItemPosition();
+        } else {
+            firstPosition = ((LinearLayoutManager) layoutManager).findFirstCompletelyVisibleItemPosition();
+        }
+
         mFirstPositions.add(firstPosition);
 
-        View view = mCurrentListView.getChildAt(0);
+        View view = mRecyclerView.getChildAt(0);
         int top = (view == null) ? 0 : view.getTop();
 
         mTops.add(top);
@@ -548,7 +532,6 @@ public class ExtendedListFragment extends Fragment
     }
 
 
-    @Override
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
         // to be @overridden
     }
@@ -567,8 +550,6 @@ public class ExtendedListFragment extends Fragment
         }
 
         mRefreshListLayout.setRefreshing(false);
-        mRefreshGridLayout.setRefreshing(false);
-        mRefreshEmptyLayout.setRefreshing(false);
 
         if (mOnRefreshListener != null) {
             mOnRefreshListener.onRefresh();
@@ -585,14 +566,12 @@ public class ExtendedListFragment extends Fragment
      * <p>
      * Sets the 'enabled' state of the refresh layouts contained in the fragment.
      * <p>
-     * When 'false' is set, prevents user gestures but keeps the option to refresh programatically,
+     * When 'false' is set, prevents user gestures but keeps the option to refresh programmatically,
      *
      * @param enabled Desired state for capturing swipe gesture.
      */
     public void setSwipeEnabled(boolean enabled) {
         mRefreshListLayout.setEnabled(enabled);
-        mRefreshGridLayout.setEnabled(enabled);
-        mRefreshEmptyLayout.setEnabled(enabled);
     }
 
     /**
@@ -618,6 +597,7 @@ public class ExtendedListFragment extends Fragment
     }
 
     /**
+    /**
      * Set message for empty list view.
      */
     public void setMessageForEmptyList(String message) {
@@ -627,13 +607,27 @@ public class ExtendedListFragment extends Fragment
     }
 
     /**
-     * displays an empty list information with a headline, a message and an icon.
+     * displays an empty list information with a headline, a message and a not to be tinted icon.
      *
      * @param headline the headline
      * @param message  the message
      * @param icon     the icon to be shown
      */
-    public void setMessageForEmptyList(@StringRes final int headline, @StringRes final int message, @DrawableRes final int icon) {
+    public void setMessageForEmptyList(@StringRes final int headline, @StringRes final int message,
+                                       @DrawableRes final int icon) {
+        setMessageForEmptyList(headline, message, icon, false);
+    }
+
+    /**
+     * displays an empty list information with a headline, a message and an icon.
+     *
+     * @param headline the headline
+     * @param message  the message
+     * @param icon     the icon to be shown
+     * @param tintIcon flag if the given icon should be tinted with primary color
+     */
+    public void setMessageForEmptyList(@StringRes final int headline, @StringRes final int message,
+                                       @DrawableRes final int icon, final boolean tintIcon) {
         new Handler(Looper.getMainLooper()).post(new Runnable() {
             @Override
             public void run() {
@@ -642,7 +636,12 @@ public class ExtendedListFragment extends Fragment
                     mEmptyListHeadline.setText(headline);
                     mEmptyListMessage.setText(message);
 
-                    mEmptyListIcon.setImageDrawable(DisplayUtils.tintDrawable(icon, R.color.primary));
+                    if (tintIcon) {
+                        mEmptyListIcon.setImageDrawable(ThemeUtils.tintDrawable(icon,
+                                ThemeUtils.primaryColor(getContext())));
+                    } else {
+                        mEmptyListIcon.setImageResource(icon);
+                    }
 
                     mEmptyListIcon.setVisibility(View.VISIBLE);
                     mEmptyListProgress.setVisibility(View.GONE);
@@ -657,11 +656,12 @@ public class ExtendedListFragment extends Fragment
             @Override
             public void run() {
 
-                if (searchType == SearchType.NO_SEARCH && mEmptyListProgress.getVisibility() == View.GONE) {
+                if (searchType == SearchType.NO_SEARCH) {
                     setMessageForEmptyList(
                             R.string.file_list_empty_headline,
                             R.string.file_list_empty,
-                            R.drawable.ic_list_empty_folder
+                            R.drawable.ic_list_empty_folder,
+                            true
                     );
                 } else if (searchType == SearchType.FILE_SEARCH) {
                     setMessageForEmptyList(R.string.file_list_empty_headline_server_search,
@@ -735,76 +735,39 @@ public class ExtendedListFragment extends Fragment
     }
 
     protected void onCreateSwipeToRefresh(SwipeRefreshLayout refreshLayout) {
+        int primaryColor = ThemeUtils.primaryColor(getContext());
+        int darkColor = ThemeUtils.primaryDarkColor(getContext());
+        int accentColor = ThemeUtils.primaryAccentColor(getContext());
+
         // Colors in animations
-        refreshLayout.setColorSchemeResources(R.color.color_accent, R.color.primary, R.color.primary_dark);
+        // TODO change this to use darker and lighter color, again.
+        refreshLayout.setColorSchemeColors(accentColor, primaryColor, darkColor);
         refreshLayout.setOnRefreshListener(this);
     }
 
     @Override
     public void onRefresh(boolean ignoreETag) {
         mRefreshListLayout.setRefreshing(false);
-        mRefreshGridLayout.setRefreshing(false);
-        mRefreshEmptyLayout.setRefreshing(false);
 
         if (mOnRefreshListener != null) {
             mOnRefreshListener.onRefresh();
         }
     }
 
-    protected void setChoiceMode(int choiceMode) {
-        mListView.setChoiceMode(choiceMode);
-        mGridView.setChoiceMode(choiceMode);
-    }
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
 
-    protected void setMultiChoiceModeListener(AbsListView.MultiChoiceModeListener listener) {
-        mListView.setMultiChoiceModeListener(listener);
-        mGridView.setMultiChoiceModeListener(listener);
-    }
-
-    /**
-     * TODO doc
-     * To be called before setAdapter, or GridViewWithHeaderAndFooter will throw an exception
-     *
-     * @param enabled flag if footer should be shown/calculated
-     */
-    protected void setFooterEnabled(boolean enabled) {
-        if (enabled) {
-            if (mGridView.getFooterViewCount() == 0 && mGridView.isCorrectAdapter()) {
-                if (mGridFooterView.getParent() != null) {
-                    ((ViewGroup) mGridFooterView.getParent()).removeView(mGridFooterView);
-                }
-                mGridView.addFooterView(mGridFooterView, null, false);
-            }
-            mGridFooterView.invalidate();
-
-            if (mListView.getFooterViewsCount() == 0) {
-                if (mListFooterView.getParent() != null) {
-                    ((ViewGroup) mListFooterView.getParent()).removeView(mListFooterView);
-                }
-                mListView.addFooterView(mListFooterView, null, false);
-            }
-            mListFooterView.invalidate();
-
+        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            maxColumnSize = maxColumnSizeLandscape;
+        } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
+            maxColumnSize = maxColumnSizePortrait;
         } else {
-            mGridView.removeFooterView(mGridFooterView);
-            mListView.removeFooterView(mListFooterView);
+            maxColumnSize = maxColumnSizePortrait;
+        }
+
+        if (isGridEnabled() && getColumnSize() > maxColumnSize) {
+            ((GridLayoutManager) getRecyclerView().getLayoutManager()).setSpanCount(maxColumnSize);
         }
     }
-
-    /**
-     * set the list/grid footer text.
-     *
-     * @param text the footer text
-     */
-    protected void setFooterText(String text) {
-        if (text != null && text.length() > 0) {
-            ((TextView) mListFooterView.findViewById(R.id.footerText)).setText(text);
-            ((TextView) mGridFooterView.findViewById(R.id.footerText)).setText(text);
-            setFooterEnabled(true);
-
-        } else {
-            setFooterEnabled(false);
-        }
-    }
-
 }

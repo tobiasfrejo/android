@@ -22,7 +22,8 @@
                                         android:layout_width="match_parent"
                                         android:layout_height="match_parent"
                                         android:clickable="true"
-                                        android:fitsSystemWindows="true">
+                                        android:fitsSystemWindows="true"
+    android:focusable="true">
 
     <!-- The main content view -->
     <RelativeLayout
@@ -31,15 +32,33 @@
         android:orientation="vertical">
 
         <include
+            android:id="@+id/navigation_bar"
             layout="@layout/toolbar_standard"/>
 
         <FrameLayout
-            android:id="@+id/upload_list_fragment"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="@color/background_color"
             android:layout_above="@+id/bottom_navigation_view"
-            android:layout_below="@+id/appbar" />
+            android:layout_below="@+id/navigation_bar">
+
+            <android.support.v4.widget.SwipeRefreshLayout
+                android:id="@+id/swipe_containing_list"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:footerDividersEnabled="false"
+                android:visibility="visible">
+
+                <com.owncloud.android.ui.EmptyRecyclerView
+                    android:id="@android:id/list"
+                    android:padding="@dimen/standard_half_padding"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+            </android.support.v4.widget.SwipeRefreshLayout>
+
+            <include layout="@layout/empty_list"/>
+
+        </FrameLayout>
 
         <android.support.design.widget.BottomNavigationView
             android:id="@+id/bottom_navigation_view"

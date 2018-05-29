@@ -24,7 +24,6 @@ import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.content.Context;
 
-import com.owncloud.android.authentication.AccountUtils;
 import com.owncloud.android.lib.common.OwnCloudClient;
 import com.owncloud.android.lib.common.accounts.AccountUtils.Constants;
 import com.owncloud.android.lib.common.operations.RemoteOperation;
@@ -46,6 +45,8 @@ public class UpdateOCVersionOperation extends RemoteOperation {
 
     private static final String TAG = UpdateOCVersionOperation.class.getSimpleName();
 
+    private static final String STATUS_PATH = "/status.php";
+
     private Account mAccount;
     private Context mContext;
     private OwnCloudVersion mOwnCloudVersion;
@@ -62,24 +63,24 @@ public class UpdateOCVersionOperation extends RemoteOperation {
     protected RemoteOperationResult run(OwnCloudClient client) {
         AccountManager accountMngr = AccountManager.get(mContext); 
         String statUrl = accountMngr.getUserData(mAccount, Constants.KEY_OC_BASE_URL);
-        statUrl += AccountUtils.STATUS_PATH;
+        statUrl += STATUS_PATH;
         RemoteOperationResult result = null;
-        GetMethod get = null;
+        GetMethod getMethod = null;
 
         String webDav = client.getWebdavUri().toString();
 
         try {
-            get = new GetMethod(statUrl);
-            int status = client.executeMethod(get);
+            getMethod = new GetMethod(statUrl);
+            int status = client.executeMethod(getMethod);
             if (status != HttpStatus.SC_OK) {
-                client.exhaustResponse(get.getResponseBodyAsStream());
-                result = new RemoteOperationResult(false, status, get.getResponseHeaders());
+                result = new RemoteOperationResult(false, getMethod);
+                client.exhaustResponse(getMethod.getResponseBodyAsStream());
                 
             } else {
-                String response = get.getResponseBodyAsString();
+                String response = getMethod.getResponseBodyAsString();
                 if (response != null) {
                     JSONObject json = new JSONObject(response);
-                    if (json != null && json.getString("version") != null) {
+                    if (json.getString("version") != null) {
 
                         String version = json.getString("version");
                         mOwnCloudVersion = new OwnCloudVersion(version);
@@ -101,19 +102,19 @@ public class UpdateOCVersionOperation extends RemoteOperation {
             }
 
 
-            Log_OC.i(TAG, "Check for update of ownCloud server version at " + webDav + ": " + result.getLogMessage());
+            Log_OC.i(TAG, "Check for update of Nextcloud server version at " + webDav + ": " + result.getLogMessage());
             
         } catch (JSONException e) {
             result = new RemoteOperationResult(RemoteOperationResult.ResultCode.INSTANCE_NOT_CONFIGURED);
-            Log_OC.e(TAG, "Check for update of ownCloud server version at " + webDav + ": " + result.getLogMessage(), e);
+            Log_OC.e(TAG, "Check for update of Nextcloud server version at " + webDav + ": " + result.getLogMessage(), e);
                 
         } catch (Exception e) {
             result = new RemoteOperationResult(e);
-            Log_OC.e(TAG, "Check for update of ownCloud server version at " + webDav + ": " + result.getLogMessage(), e);
+            Log_OC.e(TAG, "Check for update of Nextcloud server version at " + webDav + ": " + result.getLogMessage(), e);
             
         } finally {
-            if (get != null) {
-                get.releaseConnection();
+            if (getMethod != null) {
+                getMethod.releaseConnection();
             }
         }
         return result;

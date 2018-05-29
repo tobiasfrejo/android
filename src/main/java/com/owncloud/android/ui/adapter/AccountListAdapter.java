@@ -20,6 +20,7 @@
 package com.owncloud.android.ui.adapter;
 
 import android.accounts.Account;
+import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
 import android.support.annotation.NonNull;
 import android.view.LayoutInflater;
@@ -35,6 +36,7 @@ import com.owncloud.android.lib.common.OwnCloudAccount;
 import com.owncloud.android.lib.common.utils.Log_OC;
 import com.owncloud.android.ui.activity.BaseActivity;
 import com.owncloud.android.utils.DisplayUtils;
+import com.owncloud.android.utils.ThemeUtils;
 
 import java.util.List;
 
@@ -63,25 +65,25 @@ public class AccountListAdapter extends ArrayAdapter<AccountListItem> implements
     @Override
     public View getView(final int position, View convertView, ViewGroup parent) {
         AccountViewHolderItem viewHolder;
+        View view = convertView;
 
-        if (convertView == null) {
+        if (view == null) {
             LayoutInflater inflater = mContext.getLayoutInflater();
-            convertView = inflater.inflate(R.layout.account_item, parent, false);
+            view = inflater.inflate(R.layout.account_item, parent, false);
 
             viewHolder = new AccountViewHolderItem();
-            viewHolder.imageViewItem = (ImageView) convertView.findViewById(R.id.user_icon);
-            viewHolder.checkViewItem = (ImageView) convertView.findViewById(R.id.ticker);
+            viewHolder.imageViewItem = view.findViewById(R.id.user_icon);
+            viewHolder.checkViewItem = view.findViewById(R.id.ticker);
             viewHolder.checkViewItem.setImageDrawable(mTintedCheck);
-            viewHolder.usernameViewItem = (TextView) convertView.findViewById(R.id.user_name);
-            viewHolder.accountViewItem = (TextView) convertView.findViewById(R.id.account);
+            viewHolder.usernameViewItem = view.findViewById(R.id.user_name);
+            viewHolder.accountViewItem = view.findViewById(R.id.account);
 
-            convertView.setTag(viewHolder);
+            view.setTag(viewHolder);
         } else {
-            viewHolder = (AccountViewHolderItem) convertView.getTag();
+            viewHolder = (AccountViewHolderItem) view.getTag();
         }
 
         AccountListItem accountListItem = mValues.get(position);
-
 
         if (accountListItem != null) {
             // create account item
@@ -92,20 +94,35 @@ public class AccountListAdapter extends ArrayAdapter<AccountListItem> implements
                 setAvatar(viewHolder, account);
                 setCurrentlyActiveState(viewHolder, account);
 
+                TextView usernameView = viewHolder.usernameViewItem;
+                TextView accountView = viewHolder.accountViewItem;
+
+                if (!accountListItem.isEnabled()) {
+                    usernameView.setPaintFlags(usernameView.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
+                    accountView.setPaintFlags(accountView.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
+                } else {
+                    usernameView.setPaintFlags(usernameView.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
+                    accountView.setPaintFlags(accountView.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
+                }
+
             } // create add account action item
             else if (AccountListItem.TYPE_ACTION_ADD == accountListItem.getType() && mListener != null) {
                 return setupAddAccountListItem(parent);
             }
         }
 
-        return convertView;
+        return view;
     }
 
     @NonNull
     private View setupAddAccountListItem(ViewGroup parent) {
         LayoutInflater inflater = mContext.getLayoutInflater();
         View actionView = inflater.inflate(R.layout.account_action, parent, false);
-        ((TextView) actionView.findViewById(R.id.user_name)).setText(R.string.prefs_add_account);
+
+        TextView userName = actionView.findViewById(R.id.user_name);
+        userName.setText(R.string.prefs_add_account);
+        userName.setTextColor(ThemeUtils.primaryColor(getContext()));
+
         ((ImageView) actionView.findViewById(R.id.user_icon)).setImageResource(R.drawable.ic_account_plus);
 
         // bind action listener
@@ -133,8 +150,10 @@ public class AccountListAdapter extends ArrayAdapter<AccountListItem> implements
 
     private void setAvatar(AccountViewHolderItem viewHolder, Account account) {
         try {
-            DisplayUtils.setAvatar(account, this, mAccountAvatarRadiusDimension,
-                    mContext.getResources(), mContext.getStorageManager(), viewHolder.imageViewItem);
+            View viewItem = viewHolder.imageViewItem;
+            viewItem.setTag(account.name);
+            DisplayUtils.setAvatar(account, this, mAccountAvatarRadiusDimension, mContext.getResources(),
+                    mContext.getStorageManager(), viewItem, mContext);
         } catch (Exception e) {
             Log_OC.e(TAG, "Error calculating RGB value for account list item.", e);
             // use user icon as a fallback
@@ -175,10 +194,10 @@ public class AccountListAdapter extends ArrayAdapter<AccountListItem> implements
      * Account ViewHolderItem to get smooth scrolling.
      */
     private static class AccountViewHolderItem {
-        ImageView imageViewItem;
-        ImageView checkViewItem;
+        private ImageView imageViewItem;
+        private ImageView checkViewItem;
 
-        TextView usernameViewItem;
-        TextView accountViewItem;
+        private TextView usernameViewItem;
+        private TextView accountViewItem;
     }
 }

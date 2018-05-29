@@ -18,12 +18,16 @@
 
 package com.owncloud.android.utils;
 
+import android.accounts.Account;
+import android.content.Context;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.support.v4.content.ContextCompat;
 import android.webkit.MimeTypeMap;
 
 import com.owncloud.android.R;
 import com.owncloud.android.datamodel.OCFile;
+import com.owncloud.android.lib.common.network.WebdavEntry;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -31,7 +35,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+
+import javax.annotation.Nullable;
 
 /**
  * <p>Helper class for detecting the right icon for a file or folder,
@@ -71,6 +78,41 @@ public class MimeTypeUtil {
     }
 
     /**
+     * Returns the Drawable of an image to use as icon associated to a known MIME type.
+     *
+     * @param mimetype MIME type string; if NULL, the method tries to guess it from the extension in filename
+     * @param filename Name, with extension.
+     * @return Drawable of an image resource.
+     */
+    public static Drawable getFileTypeIcon(String mimetype, String filename, Context context) {
+        return getFileTypeIcon(mimetype, filename, null, context);
+    }
+
+    /**
+     * Returns the Drawable of an image to use as icon associated to a known MIME type.
+     *
+     * @param mimetype MIME type string; if NULL, the method tries to guess it from the extension in filename
+     * @param filename Name, with extension.
+     * @param account account which color should be used
+     * @return Drawable of an image resource.
+     */
+    @Nullable
+    public static Drawable getFileTypeIcon(String mimetype, String filename, Account account, Context context) {
+        if (context != null) {
+            int iconId = MimeTypeUtil.getFileTypeIconId(mimetype, filename);
+            Drawable icon = ContextCompat.getDrawable(context, iconId);
+
+            if (R.drawable.file_zip == iconId) {
+                ThemeUtils.tintDrawable(icon, ThemeUtils.primaryColor(account, context));
+            }
+
+            return icon;
+        } else {
+            return null;
+        }
+    }
+
+    /**
      * Returns the resource identifier of an image to use as icon associated to a known MIME type.
      *
      * @param mimetype MIME type string; if NULL, the method tries to guess it from the extension in filename
@@ -92,25 +134,45 @@ public class MimeTypeUtil {
      * Returns the resource identifier of an image to use as icon associated to a type of folder.
      *
      * @param isSharedViaUsers flag if the folder is shared via the users system
-     * @param isSharedViaLink flag if the folder is publicly shared via link
+     * @param isSharedViaLink  flag if the folder is publicly shared via link
      * @return Identifier of an image resource.
      */
-    public static Drawable getFolderTypeIcon(boolean isSharedViaUsers, boolean isSharedViaLink) {
+    public static Drawable getFolderTypeIcon(boolean isSharedViaUsers, boolean isSharedViaLink, boolean isEncrypted,
+                                             WebdavEntry.MountType mountType, Context context) {
+        return getFolderTypeIcon(isSharedViaUsers, isSharedViaLink, isEncrypted, null, mountType, context);
+    }
+
+    /**
+     * Returns the resource identifier of an image to use as icon associated to a type of folder.
+     *
+     * @param isSharedViaUsers flag if the folder is shared via the users system
+     * @param isSharedViaLink flag if the folder is publicly shared via link
+     * @param isEncrypted flag if the folder is encrypted
+     * @param account account which color should be used
+     * @return Identifier of an image resource.
+     */
+    public static Drawable getFolderTypeIcon(boolean isSharedViaUsers, boolean isSharedViaLink,
+                                             boolean isEncrypted, Account account, WebdavEntry.MountType mountType, 
+                                             Context context) {
         int drawableId;
 
         if (isSharedViaLink) {
             drawableId = R.drawable.folder_public;
         } else if (isSharedViaUsers) {
             drawableId = R.drawable.shared_with_me_folder;
+        } else if (isEncrypted) {
+            drawableId = R.drawable.ic_list_encrypted_folder;
+        } else if (WebdavEntry.MountType.EXTERNAL.equals(mountType)) {
+            drawableId = R.drawable.folder_external;
         } else {
-            drawableId = R.drawable.ic_menu_archive;
+            drawableId = R.drawable.folder;
         }
 
-        return DisplayUtils.tintDrawable(drawableId, R.color.primary);
+        return ThemeUtils.tintDrawable(drawableId, ThemeUtils.elementColor(account, context));
     }
 
-    public static Drawable getDefaultFolderIcon() {
-        return getFolderTypeIcon(false, false);
+    public static Drawable getDefaultFolderIcon(Context context) {
+        return getFolderTypeIcon(false, false, false, WebdavEntry.MountType.INTERNAL, context);
     }
 
 
@@ -133,29 +195,29 @@ public class MimeTypeUtil {
      * @return 'True' if the mime type defines image
      */
     public static boolean isImage(String mimeType) {
-        return (mimeType != null && mimeType.toLowerCase().startsWith("image/") && !mimeType.toLowerCase().contains
-                ("djvu"));
+        return (mimeType != null && mimeType.toLowerCase(Locale.ROOT).startsWith("image/") &&
+                !mimeType.toLowerCase(Locale.ROOT).contains("djvu"));
     }
 
     /**
      * @return 'True' the mime type defines video
      */
     public static boolean isVideo(String mimeType) {
-        return (mimeType != null && mimeType.toLowerCase().startsWith("video/"));
+        return (mimeType != null && mimeType.toLowerCase(Locale.ROOT).startsWith("video/"));
     }
 
     /**
      * @return 'True' the mime type defines audio
      */
     public static boolean isAudio(String mimeType) {
-        return (mimeType != null && mimeType.toLowerCase().startsWith("audio/"));
+        return (mimeType != null && mimeType.toLowerCase(Locale.ROOT).startsWith("audio/"));
     }
 
     /**
      * @return 'True' if mime type defines text
      */
     public static boolean isText(String mimeType) {
-        return (mimeType != null && mimeType.toLowerCase().startsWith("text/"));
+        return (mimeType != null && mimeType.toLowerCase(Locale.ROOT).startsWith("text/"));
     }
 
     /**
@@ -240,7 +302,7 @@ public class MimeTypeUtil {
      */
     private static String extractMimeType(File file) {
         Uri selectedUri = Uri.fromFile(file);
-        String fileExtension = MimeTypeMap.getFileExtensionFromUrl(selectedUri.toString().toLowerCase());
+        String fileExtension = MimeTypeMap.getFileExtensionFromUrl(selectedUri.toString().toLowerCase(Locale.ROOT));
         return MimeTypeMap.getSingleton().getMimeTypeFromExtension(fileExtension);
     }
 
@@ -310,7 +372,7 @@ public class MimeTypeUtil {
         if (pos >= 0) {
             extension = path.substring(pos + 1);
         }
-        String result = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.toLowerCase());
+        String result = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.toLowerCase(Locale.ROOT));
         return (result != null) ? result : "";
     }
 
@@ -321,7 +383,7 @@ public class MimeTypeUtil {
      * @return the file extension
      */
     private static String getExtension(String filename) {
-        return filename.substring(filename.lastIndexOf('.') + 1).toLowerCase();
+        return filename.substring(filename.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
     }
 
     /**
@@ -398,7 +460,7 @@ public class MimeTypeUtil {
         MIMETYPE_TO_ICON_MAPPING.put("application/yaml", R.drawable.file_code);
         MIMETYPE_TO_ICON_MAPPING.put("application/zip", R.drawable.file_zip);
         MIMETYPE_TO_ICON_MAPPING.put("database", R.drawable.file);
-        MIMETYPE_TO_ICON_MAPPING.put("httpd/unix-directory", R.drawable.ic_menu_archive);
+        MIMETYPE_TO_ICON_MAPPING.put("httpd/unix-directory", R.drawable.folder);
         MIMETYPE_TO_ICON_MAPPING.put("image/svg+xml", R.drawable.file_image);
         MIMETYPE_TO_ICON_MAPPING.put("image/vector", R.drawable.file_image);
         MIMETYPE_TO_ICON_MAPPING.put("text/calendar", R.drawable.file_calendar);
@@ -412,7 +474,7 @@ public class MimeTypeUtil {
         MIMETYPE_TO_ICON_MAPPING.put("text/x-python", R.drawable.file_code);
         MIMETYPE_TO_ICON_MAPPING.put("text/x-shellscript", R.drawable.file_code);
         MIMETYPE_TO_ICON_MAPPING.put("web", R.drawable.file_code);
-        MIMETYPE_TO_ICON_MAPPING.put(MimeType.DIRECTORY, R.drawable.ic_menu_archive);
+        MIMETYPE_TO_ICON_MAPPING.put(MimeType.DIRECTORY, R.drawable.folder);
     }
 
     /**

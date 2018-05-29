@@ -60,11 +60,10 @@
             android:layout_gravity="start"
             android:layout_marginTop="@dimen/standard_half_margin"
             android:textColor="@color/color_accent"
-            android:paddingLeft="@dimen/zero"
-            style="?android:attr/listSeparatorTextViewStyle"
+            style="@style/TextAppearance.AppCompat.Body2"
             />
 
-        <CheckBox
+        <android.support.v7.widget.AppCompatCheckBox
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:id="@+id/canEditCreateCheckBox"
@@ -72,7 +71,7 @@
             android:visibility="gone"
             />
 
-        <CheckBox
+        <android.support.v7.widget.AppCompatCheckBox
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:id="@+id/canEditChangeCheckBox"
@@ -80,7 +79,7 @@
             android:visibility="gone"
             />
 
-        <CheckBox
+        <android.support.v7.widget.AppCompatCheckBox
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:id="@+id/canEditDeleteCheckBox"
@@ -96,8 +95,7 @@
             android:layout_gravity="start"
             android:layout_marginTop="@dimen/standard_half_margin"
             android:textColor="@color/color_accent"
-            android:paddingLeft="@dimen/zero"
-            style="?android:attr/listSeparatorTextViewStyle"
+            style="@style/TextAppearance.AppCompat.Body2"
             />
     </LinearLayout>
     </LinearLayout>

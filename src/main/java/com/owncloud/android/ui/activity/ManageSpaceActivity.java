@@ -24,17 +24,16 @@ import android.content.SharedPreferences;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.support.design.widget.Snackbar;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.owncloud.android.R;
 import com.owncloud.android.lib.common.utils.Log_OC;
-import com.owncloud.android.utils.AnalyticsUtils;
 
 import java.io.File;
 
@@ -43,8 +42,6 @@ public class ManageSpaceActivity extends AppCompatActivity {
     private static final String TAG = ManageSpaceActivity.class.getSimpleName();
 
     private static final String LIB_FOLDER = "lib";
-
-    private static final String SCREEN_NAME = "Manage space";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,13 +65,6 @@ public class ManageSpaceActivity extends AppCompatActivity {
         });
     }
 
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        AnalyticsUtils.setCurrentScreenName(this, SCREEN_NAME, TAG);
-    }
-
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         boolean retval = true;
@@ -85,6 +75,7 @@ public class ManageSpaceActivity extends AppCompatActivity {
             default:
                 Log_OC.w(TAG, "Unknown menu item triggered");
                 retval =  super.onOptionsItemSelected(item);
+                break;
         }
         return retval;
     }
@@ -141,9 +132,11 @@ public class ManageSpaceActivity extends AppCompatActivity {
         protected void onPostExecute(Boolean result) {
             super.onPostExecute(result);
             if (!result) {
-                Toast.makeText(getApplicationContext(),
-                        getString(R.string.manage_space_clear_data),
-                        Toast.LENGTH_LONG).show();
+                Snackbar.make(
+                        findViewById(android.R.id.content),
+                        R.string.manage_space_clear_data,
+                        Snackbar.LENGTH_LONG
+                ).show();
             } else {
                 finish();
                 System.exit(0);

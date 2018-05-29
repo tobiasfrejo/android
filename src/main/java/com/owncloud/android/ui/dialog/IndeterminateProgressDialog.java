@@ -24,11 +24,13 @@ import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.content.DialogInterface.OnKeyListener;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
 import android.support.v4.app.DialogFragment;
 import android.view.KeyEvent;
 import android.widget.ProgressBar;
 
 import com.owncloud.android.R;
+import com.owncloud.android.utils.ThemeUtils;
 
 
 public class IndeterminateProgressDialog extends DialogFragment {
@@ -58,6 +60,7 @@ public class IndeterminateProgressDialog extends DialogFragment {
     /**
      * {@inheritDoc}
      */
+    @NonNull
     @Override
     public Dialog onCreateDialog(Bundle savedInstanceState) {
         /// create indeterminate progress dialog
@@ -66,8 +69,8 @@ public class IndeterminateProgressDialog extends DialogFragment {
         progressDialog.setOnShowListener(new DialogInterface.OnShowListener() {
             @Override
             public void onShow(DialogInterface dialog) {
-                ProgressBar v = (ProgressBar) progressDialog.findViewById(android.R.id.progress);
-                v.getIndeterminateDrawable().setColorFilter(getResources().getColor(R.color.color_accent),
+                ProgressBar v = progressDialog.findViewById(android.R.id.progress);
+                v.getIndeterminateDrawable().setColorFilter(ThemeUtils.primaryAccentColor(getContext()),
                         android.graphics.PorterDuff.Mode.MULTIPLY);
 
             }
@@ -87,10 +90,7 @@ public class IndeterminateProgressDialog extends DialogFragment {
                 public boolean onKey(DialogInterface dialog, int keyCode,
                         KeyEvent event) {
 
-                    if( keyCode == KeyEvent.KEYCODE_BACK) {
-                        return true;
-                    }
-                    return false;
+                    return keyCode == KeyEvent.KEYCODE_BACK;
                 }
 
             };

@@ -1,4 +1,4 @@
-/**
+/*
  *   Nextcloud Android client application
  *
  *   @author Bartosz Przybylski
@@ -27,44 +27,57 @@ import android.os.Parcelable;
 
 import com.owncloud.android.MainApp;
 import com.owncloud.android.R;
-import com.owncloud.android.lib.common.utils.Log_OC;
 
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.regex.Pattern;
 
 /**
  * @author Bartosz Przybylski
  */
 public class FeatureList {
     private static final boolean SHOW_ON_FIRST_RUN = true;
+    private static final boolean SHOW_ON_UPGRADE = false;
 
-    private static final String VERSION_1_0_0 = "1.0.0";
-    private static final String BETA_VERSION_0 = "0";
+    private static final int VERSION_1_0_0 = 10000099;
+    private static final int VERSION_3_0_0 = 30000099;
+    private static final int BETA_VERSION_0 = 0;
 
-    static final private FeatureItem featuresList[] = {
-            // Basic features showed on first install
-            new FeatureItem(R.drawable.whats_new_files,
-                    R.string.welcome_feature_1_title, R.string.welcome_feature_1_text,
-                    VERSION_1_0_0, BETA_VERSION_0, SHOW_ON_FIRST_RUN),
-            new FeatureItem(R.drawable.whats_new_accounts,
+    static public ArrayList<FeatureItem> get(boolean isMultiAccount) {
+        ArrayList<FeatureItem> featuresList = new ArrayList<>();
+        // Basic features showed on first install
+        featuresList.add(new FeatureItem(R.drawable.whats_new_files,
+                R.string.welcome_feature_1_title, R.string.welcome_feature_1_text,
+                VERSION_1_0_0, BETA_VERSION_0, SHOW_ON_FIRST_RUN, true, false));
+        if (isMultiAccount) {
+            featuresList.add(new FeatureItem(R.drawable.whats_new_accounts,
                     R.string.welcome_feature_2_title, R.string.welcome_feature_2_text,
-                    VERSION_1_0_0, BETA_VERSION_0, SHOW_ON_FIRST_RUN),
-            new FeatureItem(R.drawable.what_new_instant_upload,
-                    R.string.welcome_feature_3_title, R.string.welcome_feature_3_text,
-                    VERSION_1_0_0, BETA_VERSION_0, SHOW_ON_FIRST_RUN),
-            // Features introduced in certain point in time
-    };
+                    VERSION_1_0_0, BETA_VERSION_0, SHOW_ON_FIRST_RUN, true, false));
+        }
+        featuresList.add(new FeatureItem(R.drawable.whats_new_auto_upload,
+                R.string.welcome_feature_3_title, R.string.welcome_feature_3_text,
+                VERSION_1_0_0, BETA_VERSION_0, SHOW_ON_FIRST_RUN, true, false));
 
-    static public FeatureItem[] get() {
+        // 3.0.0
+        featuresList.add(new FeatureItem(R.drawable.whats_new_end_to_end_encryption,
+                R.string.whats_new_end_to_end_encryption_title, R.string.whats_new_end_to_end_encryption_content,
+                VERSION_3_0_0, BETA_VERSION_0, SHOW_ON_UPGRADE, false, false));
+        featuresList.add(new FeatureItem(R.drawable.whats_new_resized_images, R.string.whats_new_resized_images_title,
+                R.string.whats_new_resized_images_content, VERSION_3_0_0, BETA_VERSION_0, SHOW_ON_UPGRADE,
+                false, false));
+        featuresList.add(new FeatureItem(R.drawable.whats_new_ipv6, R.string.whats_new_ipv6_title,
+                R.string.whats_new_ipv6_content, VERSION_3_0_0,
+                BETA_VERSION_0, SHOW_ON_UPGRADE, false, false));
+
         return featuresList;
     }
 
-    static public FeatureItem[] getFiltered(final int lastSeenVersionCode, final boolean isFirstRun, boolean isBeta) {
+    static public FeatureItem[] getFiltered(int lastSeenVersionCode, boolean isFirstRun, boolean isBeta,
+                                            boolean isMultiAccount) {
         List<FeatureItem> features = new LinkedList<>();
 
-        for (FeatureItem item : get()) {
-            final int itemVersionCode = isBeta ? item.getBetaVersionNumber() : item.getVersionNumber();
+        for (FeatureItem item : get(isMultiAccount)) {
+            final int itemVersionCode = isBeta ? item.getBetaVersionNumber() : item.getVersionCode();
             if (isFirstRun && item.shouldShowOnFirstRun()) {
                 features.add(item);
             } else if (!isFirstRun && !item.shouldShowOnFirstRun() &&
@@ -81,21 +94,31 @@ public class FeatureList {
         private int image;
         private int titleText;
         private int contentText;
-        private int versionNumber;
+        private int versionCode;
         private int betaVersion;
         private boolean showOnInitialRun;
+        private boolean contentCentered;
+        private boolean bulletList;
 
-        public FeatureItem(int image, int titleText, int contentText, String version, String betaVersion) {
-            this(image, titleText, contentText, version, betaVersion, false);
+        public FeatureItem(int image, int titleText, int contentText, int version, int betaVersion) {
+            this(image, titleText, contentText, version, betaVersion, false, true, true);
         }
 
-        public FeatureItem(int image, int titleText, int contentText, String version, String betaVersion, boolean showOnInitialRun) {
+        public FeatureItem(int image, int titleText, int contentText, int version, int betaVersion,
+                           boolean showOnInitialRun) {
+            this(image, titleText, contentText, version, betaVersion, showOnInitialRun, true, true);
+        }
+
+        public FeatureItem(int image, int titleText, int contentText, int versionCode, int betaVersion,
+                           boolean showOnInitialRun, boolean contentCentered, boolean bulletList) {
             this.image = image;
             this.titleText = titleText;
             this.contentText = contentText;
-            this.versionNumber = versionCodeFromString(version);
-            this.betaVersion = Integer.parseInt(betaVersion);
+            this.versionCode = versionCode;
+            this.betaVersion = betaVersion;
             this.showOnInitialRun = showOnInitialRun;
+            this.contentCentered = contentCentered;
+            this.bulletList = bulletList;
         }
 
         public boolean shouldShowImage() { return image != DO_NOT_SHOW; }
@@ -107,9 +130,19 @@ public class FeatureList {
         public boolean shouldShowContentText() { return contentText != DO_NOT_SHOW; }
         public int getContentText() { return contentText; }
 
-        public int getVersionNumber() { return versionNumber; }
+        public int getVersionCode() {
+            return versionCode;
+        }
         public int getBetaVersionNumber() { return betaVersion; }
         public boolean shouldShowOnFirstRun() { return showOnInitialRun; }
+
+        public boolean shouldContentCentered() {
+            return contentCentered;
+        }
+
+        public boolean shouldShowBulletPointList() {
+            return bulletList;
+        }
 
         @Override
         public int describeContents() {
@@ -121,18 +154,22 @@ public class FeatureList {
             dest.writeInt(image);
             dest.writeInt(titleText);
             dest.writeInt(contentText);
-            dest.writeInt(versionNumber);
+            dest.writeInt(versionCode);
             dest.writeInt(betaVersion);
             dest.writeByte((byte) (showOnInitialRun ? 1 : 0));
+            dest.writeByte((byte) (contentCentered ? 1 : 0));
+            dest.writeByte((byte) (bulletList ? 1 : 0));
         }
 
         private FeatureItem(Parcel p) {
             image = p.readInt();
             titleText = p.readInt();
             contentText = p.readInt();
-            versionNumber = p.readInt();
+            versionCode = p.readInt();
             betaVersion = p.readInt();
             showOnInitialRun = p.readByte() == 1;
+            contentCentered = p.readByte() == 1;
+            bulletList = p.readByte() == 1;
         }
         public static final Parcelable.Creator CREATOR =
                 new Parcelable.Creator() {
@@ -147,16 +184,5 @@ public class FeatureList {
                         return new FeatureItem[size];
                     }
                 };
-    }
-
-    private static int versionCodeFromString(String version) {
-        String v[] = version.split(Pattern.quote("."));
-        if (v.length != 3) {
-            Log_OC.e("FeatureList", "Version string is incorrect " + version);
-            return 0;
-        }
-        return Integer.parseInt(v[0])*(int)(10e6) +
-                Integer.parseInt(v[1])*(int)(10e4) +
-                Integer.parseInt(v[2])*100;
     }
 }

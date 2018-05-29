@@ -1,4 +1,4 @@
-/**
+/*
  *   ownCloud Android client application
  *
  *   @author David A. Velasco
@@ -29,6 +29,8 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.DialogFragment;
 import android.support.v7.app.AlertDialog;
 import android.view.LayoutInflater;
@@ -46,6 +48,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Dialog showing a list activities able to resolve a given Intent, 
@@ -77,6 +80,7 @@ public class ShareLinkToDialog  extends DialogFragment {
     }
     
     @Override
+    @NonNull
     public Dialog onCreateDialog(Bundle savedInstanceState) {
         mIntent = getArguments().getParcelable(ARG_INTENT);
         String[] packagesToExclude = getArguments().getStringArray(ARG_PACKAGES_TO_EXCLUDE);
@@ -84,13 +88,12 @@ public class ShareLinkToDialog  extends DialogFragment {
                 packagesToExclude : new String[0]);
 
         PackageManager pm= getActivity().getPackageManager();
-        List<ResolveInfo> activities = pm.queryIntentActivities(mIntent,
-                PackageManager.MATCH_DEFAULT_ONLY);
+        List<ResolveInfo> activities = pm.queryIntentActivities(mIntent, PackageManager.MATCH_DEFAULT_ONLY);
         Iterator<ResolveInfo> it = activities.iterator();
         ResolveInfo resolveInfo;
         while (it.hasNext()) {
             resolveInfo = it.next();
-            if (packagesToExcludeList.contains(resolveInfo.activityInfo.packageName.toLowerCase())){
+            if (packagesToExcludeList.contains(resolveInfo.activityInfo.packageName.toLowerCase(Locale.ROOT))) {
                 it.remove();
             }
         }
@@ -110,7 +113,6 @@ public class ShareLinkToDialog  extends DialogFragment {
         mAdapter = new ActivityAdapter(getActivity(), pm, activities);
         
         return createSelector(sendAction);
-        
     }
 
     private AlertDialog createSelector(final boolean sendAction) {
@@ -152,12 +154,14 @@ public class ShareLinkToDialog  extends DialogFragment {
         }
         
         @Override
-        public View getView(int position, View convertView, ViewGroup parent) {
-            if (convertView == null) {
-                convertView = newView(parent);
+        public @NonNull View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
+            View view = convertView;
+
+            if (view == null) {
+                view = newView(parent);
             }
-            bindView(position, convertView);
-            return convertView;
+            bindView(position, view);
+            return view;
         }
         
         private View newView(ViewGroup parent) {
@@ -166,9 +170,9 @@ public class ShareLinkToDialog  extends DialogFragment {
         }
         
         private void bindView(int position, View row) {
-            TextView label = (TextView) row.findViewById(R.id.title);
+            TextView label = row.findViewById(R.id.title);
             label.setText(getItem(position).loadLabel(mPackageManager));
-            ImageView icon = (ImageView) row.findViewById(R.id.icon);
+            ImageView icon = row.findViewById(R.id.icon);
             icon.setImageDrawable(getItem(position).loadIcon(mPackageManager));
         }
     }

@@ -22,7 +22,9 @@ package com.owncloud.android.ui.dialog;
 
 import android.app.Dialog;
 import android.content.DialogInterface;
+import android.graphics.PorterDuff;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
 import android.support.v4.app.DialogFragment;
 import android.support.v7.app.AlertDialog;
 import android.view.LayoutInflater;
@@ -30,12 +32,13 @@ import android.view.View;
 import android.view.WindowManager.LayoutParams;
 import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.owncloud.android.R;
 import com.owncloud.android.datamodel.OCFile;
 import com.owncloud.android.lib.resources.files.FileUtils;
 import com.owncloud.android.ui.activity.ComponentsGetter;
+import com.owncloud.android.utils.DisplayUtils;
+import com.owncloud.android.utils.ThemeUtils;
 
 /**
  *  Dialog to input the name for a new folder to create.  
@@ -65,26 +68,42 @@ public class CreateFolderDialogFragment
         return frag;
         
     }
-    
+
+    @Override
+    public void onStart() {
+        super.onStart();
+
+        int color = ThemeUtils.primaryAccentColor(getContext());
+
+        AlertDialog alertDialog = (AlertDialog) getDialog();
+
+        alertDialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(color);
+        alertDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(color);
+    }
+
+    @NonNull
     @Override
     public Dialog onCreateDialog(Bundle savedInstanceState) {
+        int accentColor = ThemeUtils.primaryAccentColor(getContext());
         mParentFolder = getArguments().getParcelable(ARG_PARENT_FOLDER);
-        
+
         // Inflate the layout for the dialog
         LayoutInflater inflater = getActivity().getLayoutInflater();
         View v = inflater.inflate(R.layout.edit_box_dialog, null);
-        
+
         // Setup layout 
-        EditText inputText = ((EditText)v.findViewById(R.id.user_input));
+        EditText inputText = v.findViewById(R.id.user_input);
         inputText.setText("");
         inputText.requestFocus();
-        
+        inputText.getBackground().setColorFilter(accentColor, PorterDuff.Mode.SRC_ATOP);
+
         // Build the dialog  
         AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
         builder.setView(v)
-               .setPositiveButton(R.string.common_ok, this)
-               .setNegativeButton(R.string.common_cancel, this)
-               .setTitle(R.string.uploader_info_dirname);
+                .setPositiveButton(R.string.common_ok, this)
+                .setNegativeButton(R.string.common_cancel, this)
+                .setTitle(ThemeUtils.getColoredTitle(getResources().getString(R.string.uploader_info_dirname),
+                        accentColor));
         Dialog d = builder.create();
         d.getWindow().setSoftInputMode(LayoutParams.SOFT_INPUT_STATE_VISIBLE);
         return d;
@@ -99,23 +118,19 @@ public class CreateFolderDialogFragment
                         .getText().toString().trim();
             
             if (newFolderName.length() <= 0) {
-                Toast.makeText(
-                        getActivity(),
-                        R.string.filename_empty, 
-                        Toast.LENGTH_LONG).show();
+                DisplayUtils.showSnackMessage(getActivity(), R.string.filename_empty);
                 return;
             }
             boolean serverWithForbiddenChars = ((ComponentsGetter)getActivity()).
                     getFileOperationsHelper().isVersionWithForbiddenCharacters();
 
             if (!FileUtils.isValidName(newFolderName, serverWithForbiddenChars)) {
-                int messageId = 0;
+
                 if (serverWithForbiddenChars) {
-                    messageId = R.string.filename_forbidden_charaters_from_server;
+                    DisplayUtils.showSnackMessage(getActivity(), R.string.filename_forbidden_charaters_from_server);
                 } else {
-                    messageId = R.string.filename_forbidden_characters;
+                    DisplayUtils.showSnackMessage(getActivity(), R.string.filename_forbidden_characters);
                 }
-                Toast.makeText(getActivity(), messageId, Toast.LENGTH_LONG).show();
 
                 return;
             }
@@ -126,5 +141,4 @@ public class CreateFolderDialogFragment
                 getFileOperationsHelper().createFolder(path, false);
         }
     }
-        
 }

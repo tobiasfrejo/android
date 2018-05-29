@@ -1,20 +1,20 @@
-/**
+/*
  * Nextcloud Android client application
  *
  * @author Tobias Kaminsky
  * Copyright (C) 2017 Tobias Kaminsky
  * Copyright (C) 2017 Nextcloud GmbH.
- * <p>
+ * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * at your option) any later version.
- * <p>
+ * 
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * <p>
+ * 
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -28,15 +28,17 @@ import android.os.Bundle;
 import android.support.design.widget.BottomNavigationView;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentTransaction;
+import android.support.v4.widget.DrawerLayout;
 import android.view.View;
 
 import com.evernote.android.job.JobManager;
 import com.evernote.android.job.JobRequest;
 import com.evernote.android.job.util.support.PersistableBundleCompat;
+import com.owncloud.android.MainApp;
 import com.owncloud.android.R;
 import com.owncloud.android.datamodel.OCFile;
+import com.owncloud.android.jobs.ContactsBackupJob;
 import com.owncloud.android.lib.common.utils.Log_OC;
-import com.owncloud.android.services.ContactsBackupJob;
 import com.owncloud.android.ui.fragment.FileFragment;
 import com.owncloud.android.ui.fragment.contactsbackup.ContactListFragment;
 import com.owncloud.android.ui.fragment.contactsbackup.ContactsBackupFragment;
@@ -49,13 +51,13 @@ import java.util.Set;
 /**
  * This activity shows all settings for contact backup/restore
  */
-
 public class ContactsPreferenceActivity extends FileActivity implements FileFragment.ContainerActivity {
     public static final String TAG = ContactsPreferenceActivity.class.getSimpleName();
 
     public static final String PREFERENCE_CONTACTS_AUTOMATIC_BACKUP = "PREFERENCE_CONTACTS_AUTOMATIC_BACKUP";
     public static final String PREFERENCE_CONTACTS_LAST_BACKUP = "PREFERENCE_CONTACTS_LAST_BACKUP";
     public static final String BACKUP_TO_LIST = "BACKUP_TO_LIST";
+    public static final String EXTRA_SHOW_SIDEBAR = "SHOW_SIDEBAR";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,6 +71,20 @@ public class ContactsPreferenceActivity extends FileActivity implements FileFrag
         // setup drawer
         setupDrawer(R.id.nav_contacts);
 
+        // show sidebar?
+        boolean showSidebar = getIntent().getBooleanExtra(EXTRA_SHOW_SIDEBAR, true);
+        if (!showSidebar) {
+            setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED);
+
+            if (getSupportActionBar() != null) {
+                getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            }
+            
+            if (mDrawerToggle != null) {
+                mDrawerToggle.setDrawerIndicatorEnabled(false);
+            }
+        }
+
         Intent intent = getIntent();
         if (savedInstanceState == null) {
             FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
@@ -76,7 +92,7 @@ public class ContactsPreferenceActivity extends FileActivity implements FileFrag
                     intent.getParcelableExtra(ContactListFragment.ACCOUNT) == null) {
                 ContactsBackupFragment fragment = new ContactsBackupFragment();
                 Bundle bundle = new Bundle();
-                bundle.putParcelable(ContactListFragment.ACCOUNT, getAccount());
+                bundle.putBoolean(EXTRA_SHOW_SIDEBAR, showSidebar);
                 fragment.setArguments(bundle);
                 transaction.add(R.id.frame_container, fragment);
             } else {
@@ -88,7 +104,7 @@ public class ContactsPreferenceActivity extends FileActivity implements FileFrag
             transaction.commit();
         }
 
-        BottomNavigationView bottomNavigationView = (BottomNavigationView) findViewById(R.id.bottom_navigation_view);
+        BottomNavigationView bottomNavigationView = findViewById(R.id.bottom_navigation_view);
 
         if (getResources().getBoolean(R.bool.bottom_toolbar_enabled)) {
             bottomNavigationView.setVisibility(View.VISIBLE);
@@ -102,24 +118,27 @@ public class ContactsPreferenceActivity extends FileActivity implements FileFrag
         PersistableBundleCompat bundle = new PersistableBundleCompat();
         bundle.putString(ContactsBackupJob.ACCOUNT, account.name);
 
+        cancelPreviousContactBackupJobForAccount(MainApp.getAppContext(), account);
+
         new JobRequest.Builder(ContactsBackupJob.TAG)
                 .setExtras(bundle)
-                .setRequiresCharging(false)
-                .setPersisted(true)
-                .setUpdateCurrent(true)
                 .setPeriodic(24 * 60 * 60 * 1000)
                 .build()
                 .schedule();
     }
 
-    public static void cancelAllContactBackupJobs(Context context) {
-        Log_OC.d(TAG, "disabling all contacts backup job");
+    public static void cancelPreviousContactBackupJobForAccount(Context context, Account account) {
+        Log_OC.d(TAG, "disabling existing contacts backup job for account: " + account.name);
 
         JobManager jobManager = JobManager.create(context);
         Set<JobRequest> jobs = jobManager.getAllJobRequestsForTag(ContactsBackupJob.TAG);
 
         for (JobRequest jobRequest : jobs) {
-            jobManager.cancel(jobRequest.getJobId());
+            PersistableBundleCompat extras = jobRequest.getExtras();
+            if (extras.getString(ContactsBackupJob.ACCOUNT, "").equalsIgnoreCase(account.name) &&
+                    jobRequest.isPeriodic()) {
+                jobManager.cancel(jobRequest.getJobId());
+            }
         }
     }
 
@@ -148,6 +167,11 @@ public class ContactsPreferenceActivity extends FileActivity implements FileFrag
 
     @Override
     public void showDetails(OCFile file) {
+        // not needed
+    }
+
+    @Override
+    public void showDetails(OCFile file, int activeTab) {
         // not needed
     }
 

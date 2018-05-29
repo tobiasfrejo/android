@@ -1,4 +1,4 @@
-/**
+/*
  *   ownCloud Android client application
  *
  *   Copyright (C) 2016 ownCloud Inc.
@@ -22,6 +22,8 @@ package com.owncloud.android.ui.preview;
 import android.accounts.Account;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
+import android.support.design.widget.Snackbar;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -42,13 +44,14 @@ import com.owncloud.android.ui.activity.FileDisplayActivity;
 import com.owncloud.android.ui.dialog.ConfirmationDialogFragment;
 import com.owncloud.android.ui.dialog.RemoveFilesDialogFragment;
 import com.owncloud.android.ui.fragment.FileFragment;
-import com.owncloud.android.utils.AnalyticsUtils;
 import com.owncloud.android.utils.MimeTypeUtil;
 
+import org.mozilla.universalchardet.ReaderFactory;
+
 import java.io.BufferedWriter;
-import java.io.FileInputStream;
+import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.Reader;
 import java.io.StringWriter;
 import java.lang.ref.WeakReference;
 import java.util.LinkedList;
@@ -59,8 +62,6 @@ public class PreviewTextFragment extends FileFragment {
     private static final String EXTRA_FILE = "FILE";
     private static final String EXTRA_ACCOUNT = "ACCOUNT";
     private static final String TAG = PreviewTextFragment.class.getSimpleName();
-
-    private static final String SCREEN_NAME = "Text Preview";
 
     private Account mAccount;
     private TextView mTextPreview;
@@ -78,7 +79,7 @@ public class PreviewTextFragment extends FileFragment {
     /**
      * Creates an empty fragment for previews.
      * <p/>
-     * MUST BE KEPT: the system uses it when tries to reinstantiate a fragment automatically
+     * MUST BE KEPT: the system uses it when tries to re-instantiate a fragment automatically
      * (for instance, when the device is turned a aside).
      * <p/>
      * DO NOT CALL IT: an {@link OCFile} and {@link Account} must be provided for a successful
@@ -93,7 +94,7 @@ public class PreviewTextFragment extends FileFragment {
      * {@inheritDoc}
      */
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
+    public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         super.onCreateView(inflater, container, savedInstanceState);
         Log_OC.e(TAG, "onCreateView");
@@ -101,9 +102,9 @@ public class PreviewTextFragment extends FileFragment {
 
         View ret = inflater.inflate(R.layout.text_file_preview, container, false);
 
-        mTextPreview = (TextView) ret.findViewById(R.id.text_preview);
+        mTextPreview = ret.findViewById(R.id.text_preview);
 
-        mMultiView = (RelativeLayout) ret.findViewById(R.id.multi_view);
+        mMultiView = ret.findViewById(R.id.multi_view);
 
         setupMultiView(ret);
         setMultiListLoadingMessage();
@@ -112,11 +113,11 @@ public class PreviewTextFragment extends FileFragment {
     }
 
     protected void setupMultiView(View view) {
-        mMultiListContainer = (LinearLayout) view.findViewById(R.id.empty_list_view);
-        mMultiListMessage = (TextView) view.findViewById(R.id.empty_list_view_text);
-        mMultiListHeadline = (TextView) view.findViewById(R.id.empty_list_view_headline);
-        mMultiListIcon = (ImageView) view.findViewById(R.id.empty_list_icon);
-        mMultiListProgress = (ProgressBar) view.findViewById(R.id.empty_list_progress);
+        mMultiListContainer = view.findViewById(R.id.empty_list_view);
+        mMultiListMessage = view.findViewById(R.id.empty_list_view_text);
+        mMultiListHeadline = view.findViewById(R.id.empty_list_view_headline);
+        mMultiListIcon = view.findViewById(R.id.empty_list_icon);
+        mMultiListProgress = view.findViewById(R.id.empty_list_progress);
     }
 
     private void setMultiListLoadingMessage() {
@@ -183,7 +184,7 @@ public class PreviewTextFragment extends FileFragment {
     }
 
     private void loadAndShowTextPreview() {
-        mTextLoadTask = new TextLoadAsyncTask(new WeakReference<TextView>(mTextPreview));
+        mTextLoadTask = new TextLoadAsyncTask(new WeakReference<>(mTextPreview));
         mTextLoadTask.execute(getFile().getStoragePath());
     }
 
@@ -192,13 +193,11 @@ public class PreviewTextFragment extends FileFragment {
      * Reads the file to preview and shows its contents. Too critical to be anonymous.
      */
     private class TextLoadAsyncTask extends AsyncTask<Object, Void, StringWriter> {
-        private static final String DIALOG_WAIT_TAG = "DIALOG_WAIT";
         private final WeakReference<TextView> mTextViewReference;
 
         private TextLoadAsyncTask(WeakReference<TextView> textView) {
             mTextViewReference = textView;
         }
-
 
         @Override
         protected void onPreExecute() {
@@ -210,23 +209,26 @@ public class PreviewTextFragment extends FileFragment {
             if (params.length != 1) {
                 throw new IllegalArgumentException("The parameter to " + TextLoadAsyncTask.class.getName() + " must be (1) the file location");
             }
-            final String location = (String) params[0];
+            String location = (String) params[0];
 
-            InputStreamReader inputStream = null;
-            Scanner sc = null;
+            Scanner scanner = null;
             StringWriter source = new StringWriter();
             BufferedWriter bufferedWriter = new BufferedWriter(source);
+            Reader reader = null;
+
             try {
-                inputStream = new InputStreamReader(new FileInputStream(location), "UTF8");
-                sc = new Scanner(inputStream);
-                while (sc.hasNextLine()) {
-                    bufferedWriter.append(sc.nextLine());
-                    if (sc.hasNextLine()) {
+                File file = new File(location);
+                reader = ReaderFactory.createReaderFromFile(file);
+                scanner = new Scanner(reader);
+
+                while (scanner.hasNextLine()) {
+                    bufferedWriter.append(scanner.nextLine());
+                    if (scanner.hasNextLine()) {
                         bufferedWriter.append("\n");
                     }
                 }
                 bufferedWriter.close();
-                IOException exc = sc.ioException();
+                IOException exc = scanner.ioException();
                 if (exc != null) {
                     throw exc;
                 }
@@ -234,16 +236,16 @@ public class PreviewTextFragment extends FileFragment {
                 Log_OC.e(TAG, e.getMessage(), e);
                 finish();
             } finally {
-                if (inputStream != null) {
+                if (reader != null) {
                     try {
-                        inputStream.close();
+                        reader.close();
                     } catch (IOException e) {
                         Log_OC.e(TAG, e.getMessage(), e);
                         finish();
                     }
                 }
-                if (sc != null) {
-                    sc.close();
+                if (scanner != null) {
+                    scanner.close();
                 }
             }
             return source;
@@ -287,13 +289,21 @@ public class PreviewTextFragment extends FileFragment {
                     getFile(),
                     mContainerActivity.getStorageManager().getAccount(),
                     mContainerActivity,
-                    getActivity()
+                    getActivity(),
+                    false
             );
-            mf.filter(menu);
+            mf.filter(menu, true);
         }
 
         // additional restriction for this fragment
         MenuItem item = menu.findItem(R.id.action_rename_file);
+        if (item != null) {
+            item.setVisible(false);
+            item.setEnabled(false);
+        }
+
+        // additional restriction for this fragment
+        item = menu.findItem(R.id.action_select_all);
         if (item != null) {
             item.setVisible(false);
             item.setEnabled(false);
@@ -353,6 +363,15 @@ public class PreviewTextFragment extends FileFragment {
             item.setEnabled(false);
         }
 
+        if(getFile().isSharedWithMe() && !getFile().canReshare()){
+            // additional restriction for this fragment
+            item = menu.findItem(R.id.action_send_share_file);
+            if(item != null){
+                item.setVisible(false);
+                item.setEnabled(false);
+            }
+        }
+
     }
 
     /**
@@ -361,8 +380,16 @@ public class PreviewTextFragment extends FileFragment {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
-            case R.id.action_share_file: {
-                mContainerActivity.getFileOperationsHelper().showShareFile(getFile());
+            case R.id.action_send_share_file: {
+                if(getFile().isSharedWithMe() && !getFile().canReshare()){
+                    Snackbar.make(getView(),
+                            R.string.resharing_is_not_allowed,
+                            Snackbar.LENGTH_LONG
+                    )
+                            .show();
+                } else {
+                    mContainerActivity.getFileOperationsHelper().sendShareFile(getFile());
+                }
                 return true;
             }
             case R.id.action_open_file_with: {
@@ -376,10 +403,6 @@ public class PreviewTextFragment extends FileFragment {
             }
             case R.id.action_see_details: {
                 seeDetails();
-                return true;
-            }
-            case R.id.action_send_file: {
-                sendFile();
                 return true;
             }
             case R.id.action_sync_file: {
@@ -401,33 +424,8 @@ public class PreviewTextFragment extends FileFragment {
         setFile(file);
     }
 
-    private void sendFile() {
-        mContainerActivity.getFileOperationsHelper().sendDownloadedFile(getFile());
-    }
-
     private void seeDetails() {
         mContainerActivity.showDetails(getFile());
-    }
-
-    @Override
-    public void onPause() {
-        Log_OC.e(TAG, "onPause");
-        super.onPause();
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-        if (getActivity() != null) {
-            AnalyticsUtils.setCurrentScreenName(getActivity(), SCREEN_NAME, TAG);
-        }
-        Log_OC.e(TAG, "onResume");
-    }
-
-    @Override
-    public void onDestroy() {
-        Log_OC.e(TAG, "onDestroy");
-        super.onDestroy();
     }
 
     @Override
@@ -454,7 +452,7 @@ public class PreviewTextFragment extends FileFragment {
      * @return 'True' if the file can be handled by the fragment.
      */
     public static boolean canBePreviewed(OCFile file) {
-        final List<String> unsupportedTypes = new LinkedList<String>();
+        final List<String> unsupportedTypes = new LinkedList<>();
         unsupportedTypes.add("text/richtext");
         unsupportedTypes.add("text/rtf");
         unsupportedTypes.add("text/vnd.abc");

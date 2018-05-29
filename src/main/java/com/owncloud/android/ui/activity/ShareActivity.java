@@ -1,20 +1,20 @@
-/**
+/*
  * ownCloud Android client application
  *
  * @author masensio
  * @author David A. Velasco
  * @author Juan Carlos González Cabrero
  * Copyright (C) 2015 ownCloud Inc.
- * <p/>
+ * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2,
  * as published by the Free Software Foundation.
- * <p/>
+ * 
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * <p/>
+ * 
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -25,20 +25,20 @@ import android.app.SearchManager;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.support.design.widget.Snackbar;
 import android.support.v4.app.DialogFragment;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentTransaction;
-import android.widget.Toast;
 
 import com.owncloud.android.R;
 import com.owncloud.android.datamodel.OCFile;
+import com.owncloud.android.lib.common.OwnCloudAccount;
 import com.owncloud.android.lib.common.accounts.AccountUtils;
 import com.owncloud.android.lib.common.operations.RemoteOperation;
 import com.owncloud.android.lib.common.operations.RemoteOperationResult;
 import com.owncloud.android.lib.common.utils.Log_OC;
 import com.owncloud.android.lib.resources.shares.OCShare;
 import com.owncloud.android.lib.resources.shares.ShareType;
-import com.owncloud.android.lib.resources.status.OwnCloudVersion;
 import com.owncloud.android.operations.CreateShareViaLinkOperation;
 import com.owncloud.android.operations.GetSharesForFileOperation;
 import com.owncloud.android.operations.UnshareOperation;
@@ -55,11 +55,9 @@ import com.owncloud.android.utils.GetShareWithUsersAsyncTask;
 import java.util.ArrayList;
 
 /**
- * Activity for sharing files
+ * Activity for sharing files.
  */
-
-public class ShareActivity extends FileActivity
-        implements ShareFragmentListener {
+public class ShareActivity extends FileActivity implements ShareFragmentListener {
 
     private static final String TAG = ShareActivity.class.getSimpleName();
 
@@ -70,8 +68,6 @@ public class ShareActivity extends FileActivity
 
     /// Tags for dialog fragments
     private static final String FTAG_CHOOSER_DIALOG = "CHOOSER_DIALOG";
-    private static final String FTAG_SHARE_PASSWORD_DIALOG = "SHARE_PASSWORD_DIALOG";
-
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -87,7 +83,6 @@ public class ShareActivity extends FileActivity
             ft.replace(R.id.share_fragment_container, fragment, TAG_SHARE_FRAGMENT);
             ft.commit();
         }
-
     }
 
     protected void onAccountSet(boolean stateWasRecovered) {
@@ -144,19 +139,17 @@ public class ShareActivity extends FileActivity
         );
     }
 
-
     private int getAppropiatePermissions(ShareType shareType) {
 
-        // check if the Share is FERERATED
+        // check if the Share is FEDERATED
         boolean isFederated = ShareType.FEDERATED.equals(shareType);
 
         if (getFile().isSharedWithMe()) {
             return OCShare.READ_PERMISSION_FLAG;    // minimum permissions
 
         } else if (isFederated) {
-            OwnCloudVersion serverVersion = com.owncloud.android.authentication.AccountUtils.
-                    getServerVersion(getAccount());
-            if (serverVersion != null && serverVersion.isNotReshareableFederatedSupported()) {
+            if (com.owncloud.android.authentication.AccountUtils
+                    .getServerVersion(getAccount()).isNotReshareableFederatedSupported()) {
                 return (getFile().isFolder() ? OCShare.FEDERATED_PERMISSIONS_FOR_FOLDER_AFTER_OC9 :
                         OCShare.FEDERATED_PERMISSIONS_FOR_FILE_AFTER_OC9);
             } else {
@@ -245,9 +238,8 @@ public class ShareActivity extends FileActivity
 
     }
 
-
     /**
-     * Updates the view, reading data from {@link com.owncloud.android.datamodel.FileDataStorageManager}
+     * Updates the view, reading data from {@link com.owncloud.android.datamodel.FileDataStorageManager}.
      */
     private void refreshSharesFromStorageManager() {
 
@@ -270,7 +262,6 @@ public class ShareActivity extends FileActivity
                 editShareFragment.isAdded()) {
             editShareFragment.refreshUiFromDB();
         }
-
     }
 
     /**
@@ -300,7 +291,6 @@ public class ShareActivity extends FileActivity
         return (EditShareFragment) getSupportFragmentManager().findFragmentByTag(TAG_EDIT_SHARE_FRAGMENT);
     }
 
-
     private void onCreateShareViaLinkOperationFinish(CreateShareViaLinkOperation operation,
                                                      RemoteOperationResult result) {
         if (result.isSuccess()) {
@@ -322,7 +312,19 @@ public class ShareActivity extends FileActivity
 
             intentToShareLink.putExtra(Intent.EXTRA_TEXT, link);
             intentToShareLink.setType("text/plain");
-            String username = AccountUtils.getUsernameForAccount(getAccount());
+
+            String username;
+            try {
+                OwnCloudAccount oca = new OwnCloudAccount(getAccount(), this);
+                if (oca.getDisplayName() != null && !oca.getDisplayName().isEmpty()) {
+                    username = oca.getDisplayName();
+                } else {
+                    username = AccountUtils.getUsernameForAccount(getAccount());
+                }
+            } catch (Exception e) {
+                username = AccountUtils.getUsernameForAccount(getAccount());
+            }
+
             if (username != null) {
                 intentToShareLink.putExtra(
                     Intent.EXTRA_SUBJECT,
@@ -363,14 +365,12 @@ public class ShareActivity extends FileActivity
                 }
 
             } else {
-                Toast t = Toast.makeText(this,
-                    ErrorMessageAdapter.getErrorCauseMessage(result, operation, getResources()),
-                    Toast.LENGTH_LONG);
-                t.show();
+                Snackbar.make(
+                        findViewById(android.R.id.content),
+                        ErrorMessageAdapter.getErrorCauseMessage(result, operation, getResources()),
+                        Snackbar.LENGTH_LONG
+                ).show();
             }
         }
-
     }
-
-
 }

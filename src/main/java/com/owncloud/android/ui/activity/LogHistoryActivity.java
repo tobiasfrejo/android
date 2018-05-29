@@ -1,4 +1,4 @@
-/**
+/*
  *   ownCloud Android client application
  *
  *   Copyright (C) 2015 ownCloud Inc.
@@ -21,10 +21,12 @@ package com.owncloud.android.ui.activity;
 
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.graphics.PorterDuff;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
+import android.support.design.widget.Snackbar;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentTransaction;
@@ -34,12 +36,11 @@ import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.owncloud.android.R;
 import com.owncloud.android.lib.common.utils.Log_OC;
 import com.owncloud.android.ui.dialog.LoadingDialog;
-import com.owncloud.android.utils.AnalyticsUtils;
+import com.owncloud.android.utils.ThemeUtils;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -47,7 +48,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.ref.WeakReference;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 
 
@@ -60,8 +60,6 @@ public class LogHistoryActivity extends ToolbarActivity {
     private static final String TAG = LogHistoryActivity.class.getSimpleName();
 
     private static final String DIALOG_WAIT_TAG = "DIALOG_WAIT";
-
-    private static final String SCREEN_NAME = "Logs";
 
     private String mLogPath = Log_OC.getLogPath();
     private File logDIR = null;
@@ -76,10 +74,13 @@ public class LogHistoryActivity extends ToolbarActivity {
         setupToolbar();
 
         setTitle(getText(R.string.actionbar_logger));
-        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-        Button deleteHistoryButton = (Button) findViewById(R.id.deleteLogHistoryButton);
-        Button sendHistoryButton = (Button) findViewById(R.id.sendLogHistoryButton);
-        TextView logTV = (TextView) findViewById(R.id.logTV);
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        }
+        Button deleteHistoryButton = findViewById(R.id.deleteLogHistoryButton);
+        Button sendHistoryButton = findViewById(R.id.sendLogHistoryButton);
+        sendHistoryButton.getBackground().setColorFilter(ThemeUtils.primaryAccentColor(this), PorterDuff.Mode.SRC_ATOP);
+        TextView logTV = findViewById(R.id.logTV);
 
         deleteHistoryButton.setOnClickListener(new OnClickListener() {
             
@@ -119,12 +120,6 @@ public class LogHistoryActivity extends ToolbarActivity {
     }
 
     @Override
-    protected void onResume() {
-        super.onResume();
-        AnalyticsUtils.setCurrentScreenName(this, SCREEN_NAME, TAG);
-    }
-
-    @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         boolean retval = true;
         switch (item.getItemId()) {
@@ -133,6 +128,7 @@ public class LogHistoryActivity extends ToolbarActivity {
                 break;
             default:
                 retval = super.onOptionsItemSelected(item);
+                break;
         }
         return retval;
     }
@@ -142,20 +138,8 @@ public class LogHistoryActivity extends ToolbarActivity {
      * Start activity for sending email with logs attached
      */
     private void sendMail() {
+        String emailAddress = getString(R.string.mail_logger);
 
-        // For the moment we need to consider the possibility that setup.xml
-        // does not include the "mail_logger" entry. This block prevents that
-        // compilation fails in this case.
-        String emailAddress;
-        try {
-            Class<?> stringClass = R.string.class;
-            Field mailLoggerField = stringClass.getField("mail_logger");
-            int emailAddressId = (Integer) mailLoggerField.get(null);
-            emailAddress = getString(emailAddressId);
-        } catch (Exception e) {
-            emailAddress = "";
-        }
-        
         ArrayList<Uri> uris = new ArrayList<>();
 
         // Convert from paths to Android friendly Parcelable Uri's
@@ -181,21 +165,19 @@ public class LogHistoryActivity extends ToolbarActivity {
         try {
             startActivity(intent);
         } catch (ActivityNotFoundException e) {
-            Toast.makeText(this, getString(R.string.log_send_no_mail_app), Toast.LENGTH_LONG).show();
+            Snackbar.make(findViewById(android.R.id.content),R.string.log_send_no_mail_app,Snackbar.LENGTH_LONG).show();
             Log_OC.i(TAG, "Could not find app for sending log history.");
         }
 
     }
 
     /**
-     *
      * Class for loading the log data async
-     *
      */
     private class LoadingLogTask extends AsyncTask<String, Void, String> {
         private final WeakReference<TextView> textViewReference;
 
-        public LoadingLogTask(TextView logTV){
+        LoadingLogTask(TextView logTV) {
             // Use of a WeakReference to ensure the TextView can be garbage collected
             textViewReference  = new WeakReference<>(logTV);
         }
@@ -254,6 +236,7 @@ public class LogHistoryActivity extends ToolbarActivity {
                         br.close();
                     } catch (IOException e) {
                         // ignore
+                        Log_OC.d(TAG, "Error closing log reader", e);
                     }
                 }
             }
@@ -267,9 +250,7 @@ public class LogHistoryActivity extends ToolbarActivity {
      */
     public void showLoadingDialog() {
         // Construct dialog
-        LoadingDialog loading = new LoadingDialog(
-                getResources().getString(R.string.log_progress_dialog_text)
-        );
+        LoadingDialog loading = LoadingDialog.newInstance(getResources().getString(R.string.log_progress_dialog_text));
         FragmentManager fm = getSupportFragmentManager();
         FragmentTransaction ft = fm.beginTransaction();
         loading.show(ft, DIALOG_WAIT_TAG);
@@ -290,7 +271,9 @@ public class LogHistoryActivity extends ToolbarActivity {
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
 
-        /// global state
-        outState.putString(KEY_LOG_TEXT, mLogText);
+        if (isChangingConfigurations()) {
+            // global state
+            outState.putString(KEY_LOG_TEXT, mLogText);
+        }
     }
 }

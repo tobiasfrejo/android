@@ -1,4 +1,4 @@
-/**
+/*
  * ownCloud Android client application
  *
  * @author David A. Velasco
@@ -22,15 +22,19 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.BitmapFactory.Options;
+import android.graphics.Canvas;
 import android.graphics.Matrix;
-import android.media.ExifInterface;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
+import android.support.media.ExifInterface;
 import android.support.v4.graphics.drawable.RoundedBitmapDrawable;
 import android.support.v4.graphics.drawable.RoundedBitmapDrawableFactory;
 
 import com.owncloud.android.lib.common.utils.Log_OC;
 
+import org.apache.commons.codec.binary.Hex;
+
 import java.io.UnsupportedEncodingException;
-import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Locale;
@@ -39,6 +43,7 @@ import java.util.Locale;
  * Utility class with methods for decoding Bitmaps.
  */
 public class BitmapUtils {
+    public static final String TAG = BitmapUtils.class.getSimpleName();
 
 
     /**
@@ -48,7 +53,7 @@ public class BitmapUtils {
      * @param srcPath       Absolute path to the file containing the image.
      * @param reqWidth      Width of the surface where the Bitmap will be drawn on, in pixels.
      * @param reqHeight     Height of the surface where the Bitmap will be drawn on, in pixels.
-     * @return
+     * @return decoded bitmap
      */
     public static Bitmap decodeSampledBitmapFromFile(String srcPath, int reqWidth, int reqHeight) {
 
@@ -56,12 +61,8 @@ public class BitmapUtils {
         final Options options = new Options();
         options.inScaled = true;
         options.inPurgeable = true;
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.GINGERBREAD_MR1) {
-            options.inPreferQualityOverSpeed = false;
-        }
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.HONEYCOMB) {
-            options.inMutable = false;
-        }
+        options.inPreferQualityOverSpeed = false;
+        options.inMutable = false;
 
         // make a false load of the bitmap to get its dimensions
         options.inJustDecodeBounds = true;
@@ -110,6 +111,23 @@ public class BitmapUtils {
         return inSampleSize;
     }
 
+    /**
+     * scales a given bitmap depending on the given size parameters.
+     *
+     * @param bitmap the bitmap to be scaled
+     * @param px     the target pixel size
+     * @param width  the width
+     * @param height the height
+     * @param max    the max(height, width)
+     * @return the scaled bitmap
+     */
+    public static Bitmap scaleBitmap(Bitmap bitmap, float px, int width, int height, int max) {
+        float scale = px / max;
+        int w = Math.round(scale * width);
+        int h = Math.round(scale * height);
+        return Bitmap.createScaledBitmap(bitmap, w, h, true);
+    }
+    
     /**
      * Rotate bitmap according to EXIF orientation. 
      * Cf. http://www.daveperrett.com/articles/2012/07/28/exif-orientation-handling-is-a-ghetto/ 
@@ -175,8 +193,8 @@ public class BitmapUtils {
      *
      *  @param h Hue is specified as degrees in the range 0 - 360.
      *  @param s Saturation is specified as a percentage in the range 1 - 100.
-     *  @param l Lumanance is specified as a percentage in the range 1 - 100.
-     *  @paran alpha  the alpha value between 0 - 1
+     *  @param l Luminance is specified as a percentage in the range 1 - 100.
+     *  @param alpha  the alpha value between 0 - 1
      *  adapted from https://svn.codehaus.org/griffon/builders/gfxbuilder/tags/GFXBUILDER_0.2/
      *  gfxbuilder-core/src/main/com/camick/awt/HSLColor.java
      */
@@ -204,7 +222,7 @@ public class BitmapUtils {
         s /= 100f;
         l /= 100f;
 
-        float q = 0;
+        float q;
 
         if (l < 0.5) {
             q = l * (1 + s);
@@ -252,19 +270,100 @@ public class BitmapUtils {
      * @param name The name
      * @return corresponding RGB color
      * @throws UnsupportedEncodingException if the charset is not supported
-     * @throws NoSuchAlgorithmException if the specified algorithm is not available
+     * @throws NoSuchAlgorithmException     if the specified algorithm is not available
      */
-    public static int[] calculateRGB(String name) throws UnsupportedEncodingException, NoSuchAlgorithmException {
-        // using adapted algorithm from /core/js/placeholder.js:50
-        byte[] seed = name.getBytes("UTF-8");
-        MessageDigest md = MessageDigest.getInstance("MD5");
-        Integer seedMd5Int = String.format(Locale.ROOT, "%032x",
-                new BigInteger(1, md.digest(seed))).hashCode();
+    public static int[] calculateHSL(String name) throws UnsupportedEncodingException, NoSuchAlgorithmException {
+        // using adapted algorithm from https://github.com/nextcloud/server/blob/master/core/js/placeholder.js#L126
 
-        double maxRange = Integer.MAX_VALUE;
-        float hue = (float) (seedMd5Int / maxRange * 360);
+        String[] result = new String[]{"0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0"};
+        double[] rgb = new double[]{0, 0, 0};
+        int sat = 70;
+        int lum = 68;
+        int modulo = 16;
 
-        return BitmapUtils.HSLtoRGB(hue, 90.0f, 65.0f, 1.0f);
+        String hash = name.toLowerCase(Locale.ROOT).replaceAll("[^0-9a-f]", "");
+
+        if (!hash.matches("^[0-9a-f]{32}")) {
+            hash = md5(hash);
+        }
+
+        // Splitting evenly the string
+        for (int i = 0; i < hash.length(); i++) {
+            result[i % modulo] = result[i % modulo] + String.valueOf(Integer.parseInt(hash.substring(i, i + 1), 16));
+        }
+
+        // Converting our data into a usable rgb format
+        // Start at 1 because 16%3=1 but 15%3=0 and makes the repartition even
+        for (int count = 1; count < modulo; count++) {
+            rgb[count % 3] += (Integer.parseInt(result[count]));
+        }
+
+        // Reduce values bigger than rgb requirements
+        rgb[0] = rgb[0] % 255;
+        rgb[1] = rgb[1] % 255;
+        rgb[2] = rgb[2] % 255;
+
+        double[] hsl = rgbToHsl(rgb[0], rgb[1], rgb[2]);
+
+        // Classic formula to check the brightness for our eye
+        // If too bright, lower the sat
+        double bright = Math.sqrt(0.299 * Math.pow(rgb[0], 2) + 0.587 * Math.pow(rgb[1], 2) + 0.114
+                * Math.pow(rgb[2], 2));
+
+        if (bright >= 200) {
+            sat = 60;
+        }
+
+        return new int[]{(int) (hsl[0] * 360), sat, lum};
+    }
+
+    private static double[] rgbToHsl(double rUntrimmed, double gUntrimmed, double bUntrimmed) {
+        double r = rUntrimmed / 255;
+        double g = gUntrimmed / 255;
+        double b = bUntrimmed / 255;
+
+        double max = Math.max(r, Math.max(g, b));
+        double min = Math.min(r, Math.min(g, b));
+        double h = (max + min) / 2;
+        double s;
+        double l = (max + min) / 2;
+
+        if (max == min) {
+            h = s = 0; // achromatic
+        } else {
+            double d = max - min;
+            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+
+            if (max == r) {
+                h = (g - b) / d + (g < b ? 6 : 0);
+            } else if (max == g) {
+                h = (b - r) / d + 2;
+            } else if (max == b) {
+                h = (r - g) / d + 4;
+            }
+            h /= 6;
+        }
+
+        double[] hsl = new double[]{0.0, 0.0, 0.0};
+        hsl[0] = h;
+        hsl[1] = s;
+        hsl[2] = l;
+
+        return hsl;
+    }
+
+    public static String md5(String string) {
+        try {
+            MessageDigest md5 = MessageDigest.getInstance("MD5");
+            md5.update(string.getBytes());
+
+            return new String(Hex.encodeHex(md5.digest()));
+
+        } catch (Exception e) {
+            Log_OC.e(TAG, e.getMessage());
+        }
+
+        return "";
     }
 
     /**
@@ -276,8 +375,35 @@ public class BitmapUtils {
      * @return the circular bitmap
      */
     public static RoundedBitmapDrawable bitmapToCircularBitmapDrawable(Resources resources, Bitmap bitmap) {
+        if (bitmap == null) {
+            return null;
+        }
+        
         RoundedBitmapDrawable roundedBitmap = RoundedBitmapDrawableFactory.create(resources, bitmap);
         roundedBitmap.setCircular(true);
         return roundedBitmap;
+    }
+
+    public static Bitmap drawableToBitmap(Drawable drawable) {
+        Bitmap bitmap;
+
+        if (drawable instanceof BitmapDrawable) {
+            BitmapDrawable bitmapDrawable = (BitmapDrawable) drawable;
+            if (bitmapDrawable.getBitmap() != null) {
+                return bitmapDrawable.getBitmap();
+            }
+        }
+
+        if (drawable.getIntrinsicWidth() <= 0 || drawable.getIntrinsicHeight() <= 0) {
+            bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+        } else {
+            bitmap = Bitmap.createBitmap(drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight(),
+                    Bitmap.Config.ARGB_8888);
+        }
+
+        Canvas canvas = new Canvas(bitmap);
+        drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+        drawable.draw(canvas);
+        return bitmap;
     }
 }

@@ -1,8 +1,10 @@
-/**
+/*
  *   ownCloud Android client application
  *
  *   @author David A. Velasco
+ *   @author Andy Scherzinger
  *   Copyright (C) 2015  ownCloud Inc.
+ *   Copyright (C) 2018 Andy Scherzinger
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License version 2,
@@ -15,19 +17,22 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 
 package com.owncloud.android.ui.fragment;
 
 import android.accounts.Account;
 import android.app.Activity;
+import android.os.Bundle;
+import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 
 import com.owncloud.android.datamodel.OCFile;
 import com.owncloud.android.files.services.FileDownloader.FileDownloaderBinder;
 import com.owncloud.android.files.services.FileUploader.FileUploaderBinder;
 import com.owncloud.android.ui.activity.ComponentsGetter;
+
+import static com.owncloud.android.ui.activity.FileActivity.EXTRA_FILE;
 
 
 /**
@@ -49,14 +54,28 @@ public class FileFragment extends Fragment {
     public FileFragment() {
         mFile = null;
     }
-    
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        Bundle bundle = getArguments();
+        setFile((OCFile) bundle.getParcelable(EXTRA_FILE));
+    }
+
     /**
      * Creates an instance for a given {@OCFile}.
      * 
      * @param file
      */
-    public FileFragment(OCFile file) {
-        mFile = file;
+    public static FileFragment newInstance(OCFile file) {
+        FileFragment fileFragment = new FileFragment();
+        Bundle bundle = new Bundle();
+
+        bundle.putParcelable(EXTRA_FILE, file);
+        fileFragment.setArguments(bundle);
+
+        return fileFragment;
     }
 
     /**
@@ -111,7 +130,15 @@ public class FileFragment extends Fragment {
          * 
          * @param file      File to show details
          */
-        public void showDetails(OCFile file);
+        void showDetails(OCFile file);
+
+        /**
+         * Request the parent activity to show the details of an {@link OCFile}.
+         *
+         * @param file      File to show details
+         * @param activeTab the active tab
+         */
+        void showDetails(OCFile file, int activeTab);
 
         
         ///// TO UNIFY IN A SINGLE CALLBACK METHOD - EVENT NOTIFICATIONs  -> something happened
@@ -122,7 +149,7 @@ public class FileFragment extends Fragment {
          *  
          * @param folder
          */
-        public void onBrowsedDownTo(OCFile folder);                 
+        void onBrowsedDownTo(OCFile folder);
 
         /**
          * Callback method invoked when a the 'transfer state' of a file changes.
@@ -141,7 +168,7 @@ public class FileFragment extends Fragment {
          * @param downloading   Flag signaling if the file is now downloading.
          * @param uploading     Flag signaling if the file is now uploading.
          */
-        public void onTransferStateChanged(OCFile file, boolean downloading, boolean uploading);
+        void onTransferStateChanged(OCFile file, boolean downloading, boolean uploading);
 
     }
 

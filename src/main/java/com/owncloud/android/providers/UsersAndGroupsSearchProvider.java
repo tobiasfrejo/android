@@ -51,6 +51,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 
 
 /**
@@ -148,7 +149,7 @@ public class UsersAndGroupsSearchProvider extends ContentProvider {
         MatrixCursor response = null;
 
 
-        String userQuery = uri.getLastPathSegment().toLowerCase();
+        String userQuery = uri.getLastPathSegment().toLowerCase(Locale.ROOT);
 
 
         /// need to trust on the AccountUtils to get the current account since the query in the client side is not
@@ -160,7 +161,7 @@ public class UsersAndGroupsSearchProvider extends ContentProvider {
                 userQuery, REQUESTED_PAGE, RESULTS_PER_PAGE
         );
         RemoteOperationResult result = searchRequest.execute(account, getContext());
-        List<JSONObject> names = new ArrayList<JSONObject>();
+        List<JSONObject> names = new ArrayList<>();
         if (result.isSuccess()) {
             for (Object o : result.getData()) {
                 // Get JSonObjects from response

@@ -4,8 +4,7 @@ version: 2
 always_pending:
   title_regex: '(WIP|wip)'
   labels:
-    - 1. to develop
-    - 2. developing
+    - 1. developing
   # custom message that will be used for the GitHub status
   explanation: 'This PR is a work in progress...'
 
@@ -15,10 +14,10 @@ group_defaults:
     ignored: true
   approve_by_comment:
     enabled: true
-    approve_regex: '^(Approved|:shipit:|:\+1:|LGTM)'
+    approve_regex: '^(Approved|:shipit:|:\+1:|LGTM|Merge)'
     reject_regex: '^(Rejected|:-1:)'
   reset_on_push:
-    enabled: true
+    enabled: false
   reset_on_reopened:
     enabled: true
 
@@ -30,7 +29,8 @@ groups:
       - AndyScherzinger
       - tobiasKaminsky
       - mario
-      - przybylski 
+      - przybylski
+      - ardevd 
 
   design-review:
     conditions:

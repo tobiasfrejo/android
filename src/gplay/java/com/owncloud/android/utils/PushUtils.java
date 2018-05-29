@@ -1,8 +1,8 @@
-/**
+/*
  * Nextcloud Android client application
  *
  * @author Mario Danic
- * Copyright (C) 2017 Mario Danic
+ * Copyright (C) 2017-2018 Mario Danic
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -26,6 +26,7 @@ import android.accounts.OperationCanceledException;
 import android.content.Context;
 import android.text.TextUtils;
 import android.util.Base64;
+import android.util.Log;
 
 import com.google.gson.Gson;
 import com.owncloud.android.MainApp;
@@ -33,6 +34,7 @@ import com.owncloud.android.R;
 import com.owncloud.android.authentication.AccountUtils;
 import com.owncloud.android.datamodel.ArbitraryDataProvider;
 import com.owncloud.android.datamodel.PushConfigurationState;
+import com.owncloud.android.datamodel.SignatureVerification;
 import com.owncloud.android.db.PreferenceManager;
 import com.owncloud.android.lib.common.OwnCloudAccount;
 import com.owncloud.android.lib.common.OwnCloudClient;
@@ -47,12 +49,14 @@ import com.owncloud.android.lib.resources.notifications.UnregisterAccountDeviceF
 import com.owncloud.android.lib.resources.notifications.models.PushResponse;
 
 import org.apache.commons.httpclient.HttpStatus;
+import org.apache.commons.io.FileUtils;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.KeyFactory;
 import java.security.KeyPair;
@@ -60,20 +64,21 @@ import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
+import java.security.Signature;
+import java.security.SignatureException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.Locale;
 
 public class PushUtils {
 
+    public static final String KEY_PUSH = "push";
     private static final String TAG = "PushUtils";
     private static final String KEYPAIR_FOLDER = "nc-keypair";
     private static final String KEYPAIR_FILE_NAME = "push_key";
     private static final String KEYPAIR_PRIV_EXTENSION = ".priv";
     private static final String KEYPAIR_PUB_EXTENSION = ".pub";
-
-    public static final String KEY_PUSH = "push";
-
     private static ArbitraryDataProvider arbitraryDataProvider;
 
     public static String generateSHA512Hash(String pushToken) {
@@ -96,10 +101,11 @@ public class PushUtils {
         }
         return result.toString();
     }
-    
+
     private static int generateRsa2048KeyPair() {
-        String keyPath = MainApp.getStoragePath() + File.separator + MainApp.getDataFolder() + File.separator
-                + KEYPAIR_FOLDER;
+        migratePushKeys();
+        String keyPath = MainApp.getAppContext().getFilesDir().getAbsolutePath() + File.separator +
+                MainApp.getDataFolder() + File.separator + KEYPAIR_FOLDER;
 
         String privateKeyPath = keyPath + File.separator + KEYPAIR_FILE_NAME + KEYPAIR_PRIV_EXTENSION;
         String publicKeyPath = keyPath + File.separator + KEYPAIR_FILE_NAME + KEYPAIR_PUB_EXTENSION;
@@ -167,7 +173,7 @@ public class PushUtils {
                     remoteOperationResult = unregisterAccountDeviceForProxyOperation.execute(mClient);
 
                     if (remoteOperationResult.isSuccess()) {
-                        arbitraryDataProvider.deleteKeyForAccount(account, KEY_PUSH);
+                        arbitraryDataProvider.deleteKeyForAccount(account.name, KEY_PUSH);
                     }
                 }
             }
@@ -191,7 +197,7 @@ public class PushUtils {
         if (!TextUtils.isEmpty(MainApp.getAppContext().getResources().getString(R.string.push_server_url)) &&
                 !TextUtils.isEmpty(token)) {
             PushUtils.generateRsa2048KeyPair();
-            String pushTokenHash = PushUtils.generateSHA512Hash(token).toLowerCase();
+            String pushTokenHash = PushUtils.generateSHA512Hash(token).toLowerCase(Locale.ROOT);
             PublicKey devicePublicKey = (PublicKey) PushUtils.readKeyFromFile(true);
             if (devicePublicKey != null) {
                 byte[] publicKeyBytes = Base64.encode(devicePublicKey.getEncoded(), Base64.NO_WRAP);
@@ -226,8 +232,8 @@ public class PushUtils {
                                             publicKey,
                                             context.getResources().getString(R.string.push_server_url));
 
-                            RemoteOperationResult remoteOperationResult = registerAccountDeviceForNotificationsOperation.
-                                    execute(mClient);
+                            RemoteOperationResult remoteOperationResult =
+                                    registerAccountDeviceForNotificationsOperation.execute(mClient);
 
                             if (remoteOperationResult.isSuccess()) {
                                 PushResponse pushResponse = remoteOperationResult.getPushResponseData();
@@ -244,9 +250,13 @@ public class PushUtils {
                                     PushConfigurationState pushArbitraryData = new PushConfigurationState(token,
                                             pushResponse.getDeviceIdentifier(), pushResponse.getSignature(),
                                             pushResponse.getPublicKey(), false);
-                                    arbitraryDataProvider.storeOrUpdateKeyValue(account, KEY_PUSH,
+                                    arbitraryDataProvider.storeOrUpdateKeyValue(account.name, KEY_PUSH,
                                             gson.toJson(pushArbitraryData));
                                 }
+                            } else if (remoteOperationResult.getCode() ==
+                                    RemoteOperationResult.ResultCode.ACCOUNT_USES_STANDARD_PASSWORD) {
+                                arbitraryDataProvider.storeOrUpdateKeyValue(account.name,
+                                        AccountUtils.ACCOUNT_USES_STANDARD_PASSWORD, "true");
                             }
                         } catch (com.owncloud.android.lib.common.accounts.AccountUtils.AccountNotFoundException e) {
                             Log_OC.d(TAG, "Failed to find an account");
@@ -266,8 +276,8 @@ public class PushUtils {
     }
 
     public static Key readKeyFromFile(boolean readPublicKey) {
-        String keyPath = MainApp.getStoragePath() + File.separator + MainApp.getDataFolder() + File.separator
-                + KEYPAIR_FOLDER;
+        String keyPath = MainApp.getAppContext().getFilesDir().getAbsolutePath() + File.separator +
+                MainApp.getDataFolder() + File.separator + KEYPAIR_FOLDER;
 
         String privateKeyPath = keyPath + File.separator + KEYPAIR_FILE_NAME + KEYPAIR_PRIV_EXTENSION;
         String publicKeyPath = keyPath + File.separator + KEYPAIR_FILE_NAME + KEYPAIR_PUB_EXTENSION;
@@ -315,7 +325,9 @@ public class PushUtils {
         FileOutputStream keyFileOutputStream = null;
         try {
             if (!new File(path).exists()) {
-                new File(path).createNewFile();
+                File newFile = new File(path);
+                newFile.getParentFile().mkdirs();
+                newFile.createNewFile();
             }
             keyFileOutputStream = new FileOutputStream(path);
             keyFileOutputStream.write(encoded);
@@ -329,4 +341,137 @@ public class PushUtils {
 
         return -1;
     }
+
+    public static void reinitKeys() {
+        Context context = MainApp.getAppContext();
+        Account[] accounts = AccountUtils.getAccounts(context);
+        for (Account account : accounts) {
+            deleteRegistrationForAccount(account);
+        }
+
+        String keyPath = context.getDir("nc-keypair", Context.MODE_PRIVATE).getAbsolutePath();
+        File privateKeyFile = new File(keyPath, "push_key.priv");
+        File publicKeyFile = new File(keyPath, "push_key.pub");
+
+        FileUtils.deleteQuietly(privateKeyFile);
+        FileUtils.deleteQuietly(publicKeyFile);
+
+        pushRegistrationToServer();
+        PreferenceManager.setKeysReInit(context);
+    }
+
+    private static void migratePushKeys() {
+        Context context = MainApp.getAppContext();
+
+        if (!PreferenceManager.getKeysMigration(context)) {
+            String oldKeyPath = MainApp.getStoragePath() + File.separator + MainApp.getDataFolder()
+                    + File.separator + "nc-keypair";
+            File oldPrivateKeyFile = new File(oldKeyPath, "push_key.priv");
+            File oldPublicKeyFile = new File(oldKeyPath, "push_key.pub");
+
+            String keyPath = context.getDir("nc-keypair", Context.MODE_PRIVATE).getAbsolutePath();
+            File privateKeyFile = new File(keyPath, "push_key.priv");
+            File publicKeyFile = new File(keyPath, "push_key.pub");
+
+            if ((privateKeyFile.exists() && publicKeyFile.exists()) ||
+                    (!oldPrivateKeyFile.exists() && !oldPublicKeyFile.exists())) {
+                PreferenceManager.setKeysMigration(context, true);
+            } else {
+                if (oldPrivateKeyFile.exists()) {
+                    try {
+                        FileStorageUtils.moveFile(oldPrivateKeyFile, privateKeyFile);
+                    } catch (IOException e) {
+                        Log.e(TAG, "Failed to move old private key to new location");
+                    }
+                }
+
+                if (oldPublicKeyFile.exists()) {
+                    try {
+                        FileStorageUtils.moveFile(oldPublicKeyFile, publicKeyFile);
+                    } catch (IOException e) {
+                        Log.e(TAG, "Failed to move old public key to new location");
+                    }
+                }
+
+                if (privateKeyFile.exists() && publicKeyFile.exists()) {
+                    PreferenceManager.setKeysMigration(context, true);
+                }
+            }
+        }
+    }
+
+    public SignatureVerification verifySignature(Context context, byte[] signatureBytes, byte[] subjectBytes) {
+        Signature signature = null;
+        PublicKey publicKey;
+        SignatureVerification signatureVerification = new SignatureVerification();
+        signatureVerification.setSignatureValid(false);
+
+        Account[] accounts = AccountUtils.getAccounts(context);
+
+        ArbitraryDataProvider arbitraryDataProvider = new ArbitraryDataProvider(context.getContentResolver());
+        String arbitraryValue;
+        Gson gson = new Gson();
+        PushConfigurationState pushArbitraryData;
+
+
+        try {
+            signature = Signature.getInstance("SHA512withRSA");
+            if (accounts.length > 0) {
+                for (Account account : accounts) {
+                    if (!TextUtils.isEmpty(arbitraryValue = arbitraryDataProvider.getValue(account, KEY_PUSH))) {
+                        pushArbitraryData = gson.fromJson(arbitraryValue, PushConfigurationState.class);
+                        if (!pushArbitraryData.isShouldBeDeleted()) {
+                            publicKey = (PublicKey) readKeyFromString(true, pushArbitraryData.getUserPublicKey());
+                            signature.initVerify(publicKey);
+                            signature.update(subjectBytes);
+                            if (signature.verify(signatureBytes)) {
+                                signatureVerification.setSignatureValid(true);
+                                signatureVerification.setAccount(account);
+                                return signatureVerification;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (NoSuchAlgorithmException e) {
+            Log.d(TAG, "No such algorithm");
+        } catch (InvalidKeyException e) {
+            Log.d(TAG, "Invalid key while trying to verify");
+        } catch (SignatureException e) {
+            Log.d(TAG, "Signature exception while trying to verify");
+        }
+
+        return signatureVerification;
+    }
+
+    private Key readKeyFromString(boolean readPublicKey, String keyString) {
+        String modifiedKey;
+        if (readPublicKey) {
+            modifiedKey = keyString.replaceAll("\\n", "").replace("-----BEGIN PUBLIC KEY-----",
+                    "").replace("-----END PUBLIC KEY-----", "");
+        } else {
+            modifiedKey = keyString.replaceAll("\\n", "").replace("-----BEGIN PRIVATE KEY-----",
+                    "").replace("-----END PRIVATE KEY-----", "");
+        }
+
+        KeyFactory keyFactory = null;
+        try {
+            keyFactory = KeyFactory.getInstance("RSA");
+            if (readPublicKey) {
+                X509EncodedKeySpec keySpec = new X509EncodedKeySpec(Base64.decode(modifiedKey, Base64.DEFAULT));
+                return keyFactory.generatePublic(keySpec);
+            } else {
+                PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(Base64.decode(modifiedKey, Base64.DEFAULT));
+                return keyFactory.generatePrivate(keySpec);
+            }
+
+        } catch (NoSuchAlgorithmException e) {
+            Log.d("TAG", "No such algorithm while reading key from string");
+        } catch (InvalidKeySpecException e) {
+            Log.d("TAG", "Invalid key spec while reading key from string");
+        }
+
+        return null;
+    }
+
 }

@@ -1,4 +1,4 @@
-/**
+/*
  *   ownCloud Android client application
  *
  *   @author Bartek Przybylski
@@ -24,8 +24,10 @@ package com.owncloud.android.ui.activity;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.PorterDuff;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -36,19 +38,16 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.owncloud.android.R;
 import com.owncloud.android.lib.common.utils.Log_OC;
-import com.owncloud.android.utils.AnalyticsUtils;
+import com.owncloud.android.utils.ThemeUtils;
 
 import java.util.Arrays;
 
 public class PassCodeActivity extends AppCompatActivity {
 
     private static final String TAG = PassCodeActivity.class.getSimpleName();
-
-    private static final String SCREEN_NAME = "Passcode lock";
 
     public final static String ACTION_REQUEST_WITH_RESULT = "ACTION_REQUEST_WITH_RESULT";
     public final static String ACTION_CHECK_WITH_RESULT = "ACTION_CHECK_WITH_RESULT";
@@ -90,17 +89,32 @@ public class PassCodeActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.passcodelock);
-        
-        mBCancel = (Button) findViewById(R.id.cancel);
-        mPassCodeHdr = (TextView) findViewById(R.id.header);
-        mPassCodeHdrExplanation = (TextView) findViewById(R.id.explanation);
-        mPassCodeEditTexts[0] = (EditText) findViewById(R.id.txt0);
+
+        int primaryColor = ThemeUtils.primaryColor(this);
+
+        mBCancel = findViewById(R.id.cancel);
+        mBCancel.getBackground().setColorFilter(primaryColor, PorterDuff.Mode.SRC_ATOP);
+
+        mPassCodeHdr = findViewById(R.id.header);
+        mPassCodeHdrExplanation = findViewById(R.id.explanation);
+
+        mPassCodeEditTexts[0] = findViewById(R.id.txt0);
+        mPassCodeEditTexts[0].setTextColor(primaryColor);
+        mPassCodeEditTexts[0].getBackground().setColorFilter(primaryColor, PorterDuff.Mode.SRC_ATOP);
         mPassCodeEditTexts[0].requestFocus();
-        getWindow().setSoftInputMode(
-                android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
-        mPassCodeEditTexts[1] = (EditText) findViewById(R.id.txt1);
-        mPassCodeEditTexts[2] = (EditText) findViewById(R.id.txt2);
-        mPassCodeEditTexts[3] = (EditText) findViewById(R.id.txt3);
+        getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+
+        mPassCodeEditTexts[1] = findViewById(R.id.txt1);
+        mPassCodeEditTexts[1].setTextColor(primaryColor);
+        mPassCodeEditTexts[1].getBackground().setColorFilter(primaryColor, PorterDuff.Mode.SRC_ATOP);
+
+        mPassCodeEditTexts[2] = findViewById(R.id.txt2);
+        mPassCodeEditTexts[2].setTextColor(primaryColor);
+        mPassCodeEditTexts[2].getBackground().setColorFilter(primaryColor, PorterDuff.Mode.SRC_ATOP);
+
+        mPassCodeEditTexts[3] = findViewById(R.id.txt3);
+        mPassCodeEditTexts[3].setTextColor(primaryColor);
+        mPassCodeEditTexts[3].getBackground().setColorFilter(primaryColor, PorterDuff.Mode.SRC_ATOP);
 
         if (ACTION_CHECK.equals(getIntent().getAction())) {
             /// this is a pass code request; the user has to input the right value
@@ -139,12 +153,6 @@ public class PassCodeActivity extends AppCompatActivity {
         }
 
         setTextListeners();
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        AnalyticsUtils.setCurrentScreenName(this, SCREEN_NAME, TAG);
     }
 
     /**
@@ -361,9 +369,8 @@ public class PassCodeActivity extends AppCompatActivity {
     private void showErrorAndRestart(int errorMessage, int headerMessage,
                                      int explanationVisibility) {
         Arrays.fill(mPassCodeDigits, null);
-        CharSequence errorSeq = getString(errorMessage);
-        Toast.makeText(this, errorSeq, Toast.LENGTH_LONG).show();
-        mPassCodeHdr.setText(headerMessage);                // TODO check if really needed
+        Snackbar.make(findViewById(android.R.id.content), getString(errorMessage), Snackbar.LENGTH_LONG).show();
+        mPassCodeHdr.setText(headerMessage);                          // TODO check if really needed
         mPassCodeHdrExplanation.setVisibility(explanationVisibility); // TODO check if really needed
         clearBoxes();
     }
@@ -423,8 +430,8 @@ public class PassCodeActivity extends AppCompatActivity {
      * Sets the input fields to empty strings and puts the focus on the first one.
      */
     protected void clearBoxes(){
-        for (int i=0; i < mPassCodeEditTexts.length; i++) {
-            mPassCodeEditTexts[i].setText("");
+        for (EditText mPassCodeEditText : mPassCodeEditTexts) {
+            mPassCodeEditText.setText("");
         }
         mPassCodeEditTexts[0].requestFocus();
     }
@@ -483,7 +490,7 @@ public class PassCodeActivity extends AppCompatActivity {
          * @param lastOne       'True' means that watcher corresponds to the last position of the
          *                      pass code.
          */
-        public PassCodeDigitTextWatcher(int index, boolean lastOne) {
+        PassCodeDigitTextWatcher(int index, boolean lastOne) {
             mIndex = index;
             mLastOne  = lastOne;
             if (mIndex < 0) {

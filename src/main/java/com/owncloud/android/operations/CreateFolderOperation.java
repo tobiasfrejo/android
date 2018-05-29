@@ -1,4 +1,4 @@
-/**
+/*
  *   ownCloud Android client application
  *
  *   @author David A. Velasco
@@ -28,6 +28,8 @@ import com.owncloud.android.lib.common.operations.RemoteOperation;
 import com.owncloud.android.lib.common.operations.RemoteOperationResult;
 import com.owncloud.android.lib.common.utils.Log_OC;
 import com.owncloud.android.lib.resources.files.CreateRemoteFolderOperation;
+import com.owncloud.android.lib.resources.files.ReadRemoteFolderOperation;
+import com.owncloud.android.lib.resources.files.RemoteFile;
 import com.owncloud.android.operations.common.SyncOperation;
 import com.owncloud.android.utils.FileStorageUtils;
 import com.owncloud.android.utils.MimeType;
@@ -43,7 +45,8 @@ public class CreateFolderOperation extends SyncOperation implements OnRemoteOper
     
     protected String mRemotePath;
     private boolean mCreateFullPath;
-    
+    private RemoteFile createdRemoteFolder;
+
     /**
      * Constructor
      * 
@@ -59,9 +62,13 @@ public class CreateFolderOperation extends SyncOperation implements OnRemoteOper
     @Override
     protected RemoteOperationResult run(OwnCloudClient client) {
         CreateRemoteFolderOperation operation = new CreateRemoteFolderOperation(mRemotePath, mCreateFullPath);
-        RemoteOperationResult result =  operation.execute(client);
+        RemoteOperationResult result = operation.execute(client, true);
         
         if (result.isSuccess()) {
+            ReadRemoteFolderOperation remoteFolderOperation = new ReadRemoteFolderOperation(mRemotePath);
+            RemoteOperationResult remoteFolderOperationResult = remoteFolderOperation.execute(client, true);
+
+            createdRemoteFolder = (RemoteFile) remoteFolderOperationResult.getData().get(0);
             saveFolderInDB();
         } else {
             Log_OC.e(TAG, mRemotePath + " hasn't been created");
@@ -88,7 +95,7 @@ public class CreateFolderOperation extends SyncOperation implements OnRemoteOper
     /**
      * Save new directory in local database.
      */
-    public void saveFolderInDB() {
+    private void saveFolderInDB() {
         if (mCreateFullPath && getStorageManager().
                 getFileByPath(FileStorageUtils.getParentPath(mRemotePath)) == null){// When parent
                                                                                     // of remote path
@@ -96,7 +103,7 @@ public class CreateFolderOperation extends SyncOperation implements OnRemoteOper
             String[] subFolders = mRemotePath.split("/");
             String composedRemotePath = "/";
 
-            // For each antecesor folders create them recursively
+            // For each ancestor folders create them recursively
             for (String subFolder : subFolders) {
                 if (!subFolder.isEmpty()) {
                     composedRemotePath = composedRemotePath + subFolder + "/";
@@ -109,7 +116,9 @@ public class CreateFolderOperation extends SyncOperation implements OnRemoteOper
             newDir.setMimetype(MimeType.DIRECTORY);
             long parentId = getStorageManager().getFileByPath(FileStorageUtils.getParentPath(mRemotePath)).getFileId();
             newDir.setParentId(parentId);
+            newDir.setRemoteId(createdRemoteFolder.getRemoteId());
             newDir.setModificationTimestamp(System.currentTimeMillis());
+            newDir.setEncrypted(FileStorageUtils.checkEncryptionStatus(newDir, getStorageManager()));
             getStorageManager().saveFile(newDir);
 
             Log_OC.d(TAG, "Create directory " + mRemotePath + " in Database");

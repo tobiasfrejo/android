@@ -34,7 +34,7 @@
 # Guidelines
 
 ## Issue reporting
-* [Report the issue](https://github.com/nextcloud/android/issues/new) using our [template][template], it includes all the information we need to track down the issue.
+* [Report the issue](https://github.com/nextcloud/android/issues/new) using our [template](https://github.com/nextcloud/android/blob/master/issue_template.md), it includes all the information we need to track down the issue.
 * This repository is *only* for issues within the Nextcloud Android app code. Issues in other components should be reported in their own repositories, e.g. [Nextcloud core](https://github.com/nextcloud/core/issues)
 * Search the [existing issues](https://github.com/nextcloud/android/issues) first, it's likely that your issue was already reported.
 If your issue appears to be a bug, and hasn't been reported, open a new issue.
@@ -55,6 +55,13 @@ If your issue appears to be a bug, and hasn't been reported, open a new issue.
 * PR exists (and then the PR# should be shown in first post)
 
 
+### Bug workflow
+* approved: at least one other is able to reproduce it
+* needs info: something unclear, or not able to reproduce
+  * if no response within 1 months, bug will be closed
+* pr exists: if bug is fixed, link to pr
+
+
 # Contributing to Source Code
 Thanks for wanting to contribute source code to Nextcloud. That's great!
 
@@ -64,13 +71,23 @@ New contributions are added under AGPL version 3.
 We are all about quality while not sacrificing speed so we use a very pragmatic workflow.
 
 * create an issue with feature request
-    * discuss it with other developers 
+    * discuss it with other developers
     * create mockup if necessary
     * must be approved --> label approved
     * after that no conceptual changes!
 * develop code
 * create [pull request](https://github.com/nextcloud/android/pulls)
-* to assure the quality of the app, any PR gets reviewed, approved and tested by [two developers](https://github.com/nextcloud/android/blob/master/MAINTAINERS) before it will be merged to master
+* to assure the quality of the app, any PR gets reviewed, approved and tested by [two developers](https://github.com/nextcloud/android/blob/master/.pullapprove.yml#L29) before it will be merged to master
+
+
+### Branching model
+![branching model](/doc/branching.png "Branching Model")
+* All contributions bug fix or feature PRs target the ```master``` branch
+* Feature releases will always be based on ```master```
+* Bug fix releases will always be based on their respective feature-release-bug-fix-branches
+* Bug fixes relevant for the most recent _and_ released feature (e.g. ```2.0.0```) or bugfix (e.g. ```2.0.1```) release will be backported to the respective bugfix branch (e.g. ```2.0.x``` or ```2.1.x```)
+* Hot fixes not relevant for an upcoming feature release but the latest release can target the bug fix branch directly
+
 
 ### Android Studio formatter setup
 Our formatter setup is rather simple:
@@ -82,8 +99,8 @@ Our formatter setup is rather simple:
 ### Build variants
 There are three build variants
 * generic: no Google Stuff, used for FDroid
-* gplay: with Google Stuff (Push notification) and Analytics disabled, used for Google Play Store
-* modified: custom, with Google Stuff and Analytics enabled, used for branded releases
+* gplay: with Google Stuff (Push notification), used for Google Play Store
+* versionDev: based on master and library master, available as direct download and FDroid
 
 ## Contribution process
 * Contribute your code in the branch 'master'. It will give us a better chance to test your code before merging it with stable code.
@@ -126,17 +143,17 @@ We do differentiate between three different kinds of releases:
 
 ### Stable
 Play store and f-droid releases for the masses.
-Pull Requests that have been tested and reviewed can go to master. After the last release candidate is out in the wild for ~2 weeks and no errors get reported (by users or in the developer console) the master branch is ready for the stable release. 
+Pull Requests that have been tested and reviewed can go to master. After the last release candidate is out in the wild for ~2 weeks and no errors get reported (by users or in the developer console) the master branch is ready for the stable release.
 So when we decide to go for a new release we freeze the master feature wise.
 
 ### Release Candidate
 _stable beta_ releases done via the Beta program of the Google Play store and f-droid.
 Whenever a PR is reviewed/approved we put it on master.
-Before releasing a new stable version there is at least one release candidate. It is based on the current master and during this phase the master is feature freezed. After ~2 weeks with no error a stable version will be releaded, which is identically to the latest release candidate. 
+Before releasing a new stable version there is at least one release candidate. It is based on the current master and during this phase the master is feature freezed. After ~2 weeks with no error a stable version will be released, which is identical to the latest release candidate. 
 
 ### Dev
 Done as a standalone app that can be installed in parallel to the stable app.
-Any PR which is labelled "ready for dev" will be automatically included in the dev app. This label should only set by the main developers. 
+Any PR which is labelled "ready for dev" will be automatically included in the dev app. This label should only set by the main developers.
 Same applies for the android-library. This repository also has a branch called dev which includes all upcoming features. The dev branch on this repository must always use the android-library dev branch.
 
 ## Version Name and number
@@ -187,6 +204,6 @@ Release Candidate releases are based on the git [master](https://github.com/next
 
 
 ### Dev Release
-Dev releases are based on the [dev](https://github.com/nextcloud/android/tree/dev) branch and are done independently from stable releases and integrate open PRs that might not be production ready or heavily tested but being put out there for people willing to test new features and provide valuable feedback on new features to be incorporated before a feature gets released in the stable app.
+Dev releases are based on the [master](https://github.com/nextcloud/android/tree/master) branch and are done independently from stable releases for people willing to test new features and provide valuable feedback on new features to be incorporated before a feature gets released in the stable app.
 
-The deployment/build is done once a day automatically. If code has changed a new apk will be published [here](https://download.nextcloud.com/android/dev) and it will, with a little delay, be available on f-droid.
+The deployment/build is done once a day automatically. If code has changed a new apk will be published [here](https://download.nextcloud.com/android/dev) and it will, with a little delay, be available on [Fdroid](https://f-droid.org/repository/browse/?fdfilter=nextcloud&fdid=com.nextcloud.android.beta).

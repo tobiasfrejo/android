@@ -11,10 +11,15 @@ buildscript {
         maven {
             url 'https://oss.sonatype.org/content/repositories/snapshots/'
         }
+        google()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:2.3.3'
+        classpath 'com.android.tools.build:gradle:3.1.2'
         classpath 'com.google.gms:google-services:3.0.0'
+        classpath 'org.codehaus.groovy:groovy-all:2.4.12' 
+        classpath('com.dicedmelon.gradle:jacoco-android:0.1.2') { 
+            exclude group: 'org.codehaus.groovy', module: 'groovy-all' 
+        }
     }
 }
 
@@ -22,6 +27,7 @@ apply plugin: 'com.android.application'
 apply plugin: 'checkstyle'
 apply plugin: 'pmd'
 apply plugin: 'findbugs'
+apply plugin: 'jacoco-android'
 
 configurations.all {
     // check for updates every build
@@ -29,7 +35,10 @@ configurations.all {
 }
 
 ext {
-    supportLibraryVersion = '25.0.0'
+    supportLibraryVersion = '27.1.1'
+    googleLibraryVersion = '12.0.1'
+    androidLibraryVersion = '1.0.40'
+    jacocoVersion = "0.7.4.201502262128"
 
     travisBuild = System.getenv("TRAVIS") == "true"
 
@@ -40,14 +49,19 @@ ext {
 repositories {
     jcenter()
     maven { url "https://jitpack.io" }
-    maven {
-        url 'https://oss.sonatype.org/content/repositories/snapshots/'
-    }
+    maven { url 'https://oss.sonatype.org/content/repositories/snapshots/' }
+    google()
 
     flatDir {
         dirs 'libs'
     }
 }
+
+// semantic versioning for version code
+def versionMajor = 3
+def versionMinor = 1
+def versionPatch = 0
+def versionBuild = 51 // 0-49=Alpha / 50-98=RC / 99=stable
 
 android {
     lintOptions {
@@ -61,10 +75,12 @@ android {
         javaMaxHeapSize "4g"
     }
 
-    compileSdkVersion 25
-    buildToolsVersion '25.0.0'
+    compileSdkVersion 27
 
     defaultConfig {
+        minSdkVersion 14
+        targetSdkVersion 27
+
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
 
         // arguments to be passed to functional tests
@@ -74,33 +90,47 @@ android {
 
         multiDexEnabled true
 
+        versionCode versionMajor * 10000000 + versionMinor * 10000 + versionPatch * 100 + versionBuild
+
+        if (versionBuild > 98) {
+            versionName "${versionMajor}.${versionMinor}.${versionPatch}"
+        } else if (versionBuild > 49) {
+            versionName "${versionMajor}.${versionMinor}.${versionPatch} RC"+(versionBuild-49)
+        } else {
+            versionName "${versionMajor}.${versionMinor}.${versionPatch} Alpha"+(versionBuild+1)
+        }
+
         // adapt structure from Eclipse to Gradle/Android Studio expectations;
         // see http://tools.android.com/tech-docs/new-build-system/user-guide#TOC-Configuring-the-Structure
+
+        flavorDimensions "default"
+
+        buildTypes {
+            debug {
+                testCoverageEnabled true
+            }
+        }
 
         productFlavors {
             // used for f-droid
             generic {
                 applicationId 'com.nextcloud.client'
+                dimension "default"
             }
 
             gplay {
                 applicationId 'com.nextcloud.client'
+                dimension "default"
             }
 
-            modified {
-                // structure is:
-                // domain tld
-                // domain name
-                // .client
-                applicationId 'dk.frejo.cloud.client'
+            versionDev {
+                applicationId "com.nextcloud.android.beta"
+                dimension "default"
+                versionCode 20180526
+                versionName "20180526"
             }
-        }
-
-        configurations {
-            modifiedCompile
         }
     }
-
 
     // adapt structure from Eclipse to Gradle/Android Studio expectations;
     // see http://tools.android.com/tech-docs/new-build-system/user-guide#TOC-Configuring-the-Structure
@@ -108,11 +138,6 @@ android {
     dexOptions {
         // Skip pre-dexing when running on Travis CI or when disabled via -Dpre-dex=false.
         preDexLibraries = preDexEnabled && !travisBuild
-    }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_7
-        targetCompatibility JavaVersion.VERSION_1_7
     }
 
     packagingOptions {
@@ -142,10 +167,10 @@ android {
             xml.enabled = false
             html.enabled = true
             xml {
-                destination "$project.buildDir/reports/pmd/pmd.xml"
+                destination = file("$project.buildDir/reports/pmd/pmd.xml")
             }
             html {
-                destination "$project.buildDir/reports/pmd/pmd.html"
+                destination = file("$project.buildDir/reports/pmd/pmd.html")
             }
         }
     }
@@ -164,66 +189,86 @@ android {
             xml.enabled = false
             html.enabled = true
             html {
-                destination "$project.buildDir/reports/findbugs/findbugs.html"
+                destination  = file("$project.buildDir/reports/findbugs/findbugs.html")
             }
         }
         classpath = files()
     }
     check.dependsOn 'checkstyle', 'findbugs', 'pmd', 'lint'
 
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
 }
 
 dependencies {
-    /// dependencies for app building
-    compile name: 'touch-image-view'
-    compile 'com.android.support:multidex:1.0.1'
+    // dependencies for app building
+    implementation 'com.android.support:multidex:1.0.3'
+//    implementation project('nextcloud-android-library')
+    genericImplementation "com.github.nextcloud:android-library:master-SNAPSHOT"
+    gplayImplementation "com.github.nextcloud:android-library:master-SNAPSHOT"
+    versionDevImplementation 'com.github.nextcloud:android-library:master-SNAPSHOT' // use always latest master
+    implementation "com.android.support:support-v4:${supportLibraryVersion}"
+    implementation "com.android.support:design:${supportLibraryVersion}"
+    implementation 'com.jakewharton:disklrucache:2.0.2'
+    implementation "com.android.support:appcompat-v7:${supportLibraryVersion}"
+    implementation "com.android.support:cardview-v7:${supportLibraryVersion}"
+    implementation "com.android.support:exifinterface:${supportLibraryVersion}"
+    implementation 'com.github.albfernandez:juniversalchardet:v2.0.0'
+    implementation 'com.google.code.findbugs:annotations:2.0.1'
+    implementation 'commons-io:commons-io:2.5'
+    implementation 'com.github.evernote:android-job:v1.2.5'
+    implementation 'com.jakewharton:butterknife:8.8.1'
+    annotationProcessor 'com.jakewharton:butterknife-compiler:8.8.1'
+    implementation 'org.greenrobot:eventbus:3.0.0'
+    implementation 'com.googlecode.ez-vcard:ez-vcard:0.10.2'
+    implementation 'org.lukhnos:nnio:0.2'
+    implementation 'com.madgag.spongycastle:pkix:1.54.0.0'
+    implementation 'com.google.code.gson:gson:2.8.2'
+    implementation 'com.afollestad:sectioned-recyclerview:0.5.0'
+    implementation 'com.github.chrisbanes:PhotoView:2.1.3'
+    implementation 'pl.droidsonroids.gif:android-gif-drawable:1.2.12'
 
-    compile 'com.github.nextcloud:android-library:1.0.21'
-    compile "com.android.support:support-v4:${supportLibraryVersion}"
-    compile "com.android.support:design:${supportLibraryVersion}"
-    compile 'com.jakewharton:disklrucache:2.0.2'
-    compile "com.android.support:appcompat-v7:${supportLibraryVersion}"
-    compile "com.android.support:cardview-v7:${supportLibraryVersion}"
-    compile 'com.getbase:floatingactionbutton:1.10.1'
-    compile 'com.google.code.findbugs:annotations:2.0.1'
-    compile group: 'commons-io', name: 'commons-io', version: '2.4'
-    compile 'com.github.evernote:android-job:v1.1.9'
-    compile 'com.jakewharton:butterknife:8.4.0'
-    annotationProcessor 'com.jakewharton:butterknife-compiler:8.4.0'
-    compile 'org.greenrobot:eventbus:3.0.0'
-    compile 'com.googlecode.ez-vcard:ez-vcard:0.10.2'
+    // uncomment for gplay
+    // implementation "com.google.firebase:firebase-messaging:${googleLibraryVersion}"
+    // implementation "com.google.android.gms:play-services-gcm:${googleLibraryVersion}"
+    implementation 'org.parceler:parceler-api:1.1.9'
+    annotationProcessor 'org.parceler:parceler:1.1.9'
+    implementation ('com.github.bumptech.glide:glide:3.7.0') {
+        exclude group: "com.android.support"
+    }
+    implementation 'com.caverock:androidsvg:1.2.1'
+    implementation "com.android.support:support-annotations:${supportLibraryVersion}"
+    implementation 'com.google.code.gson:gson:2.8.2'
 
-    // uncomment for gplay, modified
-    compile 'com.google.android.gms:play-services:10.2.4'
-
-    compile 'org.parceler:parceler-api:1.1.6'
-    annotationProcessor 'org.parceler:parceler:1.1.6'
-
-    compile 'com.github.bumptech.glide:glide:3.7.0'
-    compile 'com.caverock:androidsvg:1.2.1'
-
-    /// dependencies for local unit tests
-    testCompile 'junit:junit:4.12'
-    testCompile 'org.mockito:mockito-core:1.10.19'
-
-    /// dependencies for instrumented tests
+    // dependencies for local unit tests
+    testImplementation 'junit:junit:4.12'
+    testImplementation 'org.mockito:mockito-core:1.10.19'
+    // dependencies for instrumented tests
     // JUnit4 Rules
-    androidTestCompile 'com.android.support.test:rules:0.5'
-
+    androidTestImplementation 'com.android.support.test:rules:1.0.2'
     // Android JUnit Runner
-    androidTestCompile 'com.android.support.test:runner:0.5'
-
-    // Android Annotation Support
-    androidTestCompile "com.android.support:support-annotations:${supportLibraryVersion}"
+    androidTestImplementation 'com.android.support.test:runner:1.0.2'
 
     // Espresso core
-    androidTestCompile 'com.android.support.test.espresso:espresso-core:2.2.2'
-
+    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+    androidTestImplementation 'com.android.support.test.espresso:espresso-contrib:3.0.2'
     // UIAutomator - for cross-app UI tests, and to grant screen is turned on in Espresso tests
-    //androidTestCompile 'com.android.support.test.uiautomator:uiautomator-v18:2.1.2'
+    androidTestImplementation 'com.android.support.test.uiautomator:uiautomator-v18:2.1.3'
     // fix conflict in dependencies; see http://g.co/androidstudio/app-test-app-conflict for details
-    //androidTestCompile "com.android.support:support-annotations:${supportLibraryVersion}"
+    //androidTestImplementation "com.android.support:support-annotations:${supportLibraryVersion}"
+    implementation 'org.jetbrains:annotations:15.0'
 
+    androidTestImplementation 'tools.fastlane:screengrab:1.0.0'
+    
+//    jacocoAnt "org.jacoco:org.jacoco.ant:${jacocoVersion}"
+//    jacocoAgent "org.jacoco:org.jacoco.agent:${jacocoVersion}"
+//    androidJacocoAgent "org.jacoco:org.jacoco.agent:${jacocoVersion}"
+//    androidJacocoAnt "org.jacoco:org.jacoco.ant:${jacocoVersion}"
+//    androidJacocoAnt "org.jacoco:org.jacoco.core:${jacocoVersion}"
+//    androidJacocoAnt "org.jacoco:org.jacoco.report:${jacocoVersion}"
+//    androidJacocoAnt "org.jacoco:org.jacoco.agent:${jacocoVersion}"
 }
 
 configurations.all {
@@ -231,11 +276,35 @@ configurations.all {
 }
 
 tasks.withType(Test) {
-    /// increased logging for tests
+    // increased logging for tests
     testLogging {
         events "passed", "skipped", "failed"
     }
 }
 
-// uncomment for gplay, modified (must be at the bottom)
+android.applicationVariants.all { variant ->
+    variant.outputs.all { output ->
+        outputFileName = "${output.baseName}-${variant.versionCode}.apk"
+    }
+}
+
+task combinedTestReport(type: JacocoReport) {
+
+    reports {
+        xml.enabled = true
+        html.enabled = true
+    }
+
+    def fileFilter = ['**/R.class', '**/R$*.class', '**/BuildConfig.*', '**/Manifest*.*', '**/*Test*.*', 'android/**/*.*']
+    def debugTree = fileTree(dir: "$project.buildDir/intermediates/classes/gplay/debug", excludes: fileFilter)
+    def mainSrc = "$project.projectDir/src/main/java"
+
+    sourceDirectories = files([mainSrc])
+    classDirectories = files([debugTree])
+    executionData = fileTree(dir: project.buildDir, includes: [
+            'jacoco/testGplayDebugUnitTest.exec', 'outputs/code-coverage/connected/flavors/GPLAY/*coverage.ec'
+    ])
+}
+
+    // uncomment for gplay (must be at the bottom)
 apply plugin: 'com.google.gms.google-services'

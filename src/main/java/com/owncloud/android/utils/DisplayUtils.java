@@ -1,4 +1,4 @@
-/**
+/*
  * Nextcloud Android client application
  *
  * @author Andy Scherzinger
@@ -25,38 +25,35 @@
 package com.owncloud.android.utils;
 
 import android.accounts.Account;
+import android.accounts.AccountManager;
+import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.graphics.Point;
-import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.PictureDrawable;
 import android.net.Uri;
 import android.os.Build;
-import android.support.annotation.ColorInt;
-import android.support.annotation.ColorRes;
-import android.support.annotation.DrawableRes;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+import android.support.annotation.StringRes;
 import android.support.design.widget.BottomNavigationView;
 import android.support.design.widget.Snackbar;
-import android.support.v4.app.FragmentActivity;
-import android.support.v4.content.ContextCompat;
-import android.support.v4.content.res.ResourcesCompat;
-import android.support.v4.graphics.drawable.DrawableCompat;
+import android.support.v7.widget.AppCompatDrawableManager;
 import android.text.Spannable;
 import android.text.SpannableStringBuilder;
+import android.text.TextUtils;
 import android.text.format.DateUtils;
 import android.text.style.StyleSpan;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.widget.ImageButton;
-import android.widget.ProgressBar;
-import android.widget.SeekBar;
 
 import com.bumptech.glide.GenericRequestBuilder;
 import com.bumptech.glide.Glide;
@@ -64,10 +61,12 @@ import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.bumptech.glide.load.model.StreamEncoder;
 import com.bumptech.glide.load.resource.file.FileToStreamDecoder;
 import com.bumptech.glide.request.target.SimpleTarget;
+import com.bumptech.glide.request.target.Target;
 import com.caverock.androidsvg.SVG;
 import com.owncloud.android.MainApp;
 import com.owncloud.android.R;
 import com.owncloud.android.authentication.AccountUtils;
+import com.owncloud.android.datamodel.ArbitraryDataProvider;
 import com.owncloud.android.datamodel.FileDataStorageManager;
 import com.owncloud.android.datamodel.OCFile;
 import com.owncloud.android.datamodel.ThumbnailsCacheManager;
@@ -76,7 +75,6 @@ import com.owncloud.android.lib.common.utils.Log_OC;
 import com.owncloud.android.lib.resources.files.SearchOperation;
 import com.owncloud.android.ui.TextDrawable;
 import com.owncloud.android.ui.activity.FileDisplayActivity;
-import com.owncloud.android.ui.activity.ToolbarActivity;
 import com.owncloud.android.ui.events.MenuItemClickEvent;
 import com.owncloud.android.ui.events.SearchEvent;
 import com.owncloud.android.ui.fragment.OCFileListFragment;
@@ -90,12 +88,16 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.net.IDN;
 import java.text.DateFormat;
+import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -171,7 +173,7 @@ public class DisplayUtils {
             return mimeType2HumanReadable.get(mimetype);
         }
         if (mimetype.split("/").length >= 2) {
-            return mimetype.split("/")[1].toUpperCase() + " file";
+            return mimetype.split("/")[1].toUpperCase(Locale.getDefault()) + " file";
         }
         return MIME_TYPE_UNKNOWN;
     }
@@ -194,20 +196,20 @@ public class DisplayUtils {
      * @param url to be beautified url
      * @return beautified url
      */
-    public static String beautifyURL(String url) {
-        if (url == null) {
+    public static String beautifyURL(@Nullable String url) {
+        if (TextUtils.isEmpty(url)) {
             return "";
         }
 
         if (url.length() >= 7 && url.substring(0, 7).equalsIgnoreCase(HTTP_PROTOCOLL)) {
-            return url.substring(HTTP_PROTOCOLL.length());
+            return url.substring(HTTP_PROTOCOLL.length()).trim();
         }
 
         if (url.length() >= 8 && url.substring(0, 8).equalsIgnoreCase(HTTPS_PROTOCOLL)) {
-            return url.substring(HTTPS_PROTOCOLL.length());
+            return url.substring(HTTPS_PROTOCOLL.length()).trim();
         }
 
-        return url;
+        return url.trim();
     }
 
     /**
@@ -216,15 +218,21 @@ public class DisplayUtils {
      * @param handle to be beautified twitter handle
      * @return beautified twitter handle
      */
-    public static String beautifyTwitterHandle(String handle) {
-        if (handle == null) {
-            return "";
-        }
+    public static String beautifyTwitterHandle(@Nullable String handle) {
+        if (handle != null) {
+            String trimmedHandle = handle.trim();
 
-        if (handle.startsWith(TWITTER_HANDLE_PREFIX)) {
-            return handle;
+            if (TextUtils.isEmpty(trimmedHandle)) {
+                return "";
+            }
+
+            if (trimmedHandle.startsWith(TWITTER_HANDLE_PREFIX)) {
+                return trimmedHandle;
+            } else {
+                return TWITTER_HANDLE_PREFIX + trimmedHandle;
+            }
         } else {
-            return TWITTER_HANDLE_PREFIX + handle;
+            return "";
         }
     }
 
@@ -245,26 +253,22 @@ public class DisplayUtils {
             dots = dots + ".";
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.GINGERBREAD) {
-            // Find host name after '//' or '@'
-            int hostStart = 0;
-            if (urlNoDots.contains("//")) {
-                hostStart = url.indexOf("//") + "//".length();
-            } else if (url.contains("@")) {
-                hostStart = url.indexOf('@') + "@".length();
-            }
-
-            int hostEnd = url.substring(hostStart).indexOf("/");
-            // Handle URL which doesn't have a path (path is implicitly '/')
-            hostEnd = (hostEnd == -1 ? urlNoDots.length() : hostStart + hostEnd);
-
-            String host = urlNoDots.substring(hostStart, hostEnd);
-            host = (toASCII ? IDN.toASCII(host) : IDN.toUnicode(host));
-
-            return dots + urlNoDots.substring(0, hostStart) + host + urlNoDots.substring(hostEnd);
-        } else {
-            return dots + url;
+        // Find host name after '//' or '@'
+        int hostStart = 0;
+        if (urlNoDots.contains("//")) {
+            hostStart = url.indexOf("//") + "//".length();
+        } else if (url.contains("@")) {
+            hostStart = url.indexOf('@') + "@".length();
         }
+
+        int hostEnd = url.substring(hostStart).indexOf("/");
+        // Handle URL which doesn't have a path (path is implicitly '/')
+        hostEnd = (hostEnd == -1 ? urlNoDots.length() : hostStart + hostEnd);
+
+        String host = urlNoDots.substring(hostStart, hostEnd);
+        host = (toASCII ? IDN.toASCII(host) : IDN.toUnicode(host));
+
+        return dots + urlNoDots.substring(0, hostStart) + host + urlNoDots.substring(hostEnd);
     }
 
     /**
@@ -280,7 +284,7 @@ public class DisplayUtils {
             fallbackString) {
         try {
             return new OwnCloudAccount(savedAccount, context).getDisplayName()
-                    + " @ "
+                    + "@"
                     + convertIdn(accountName.substring(accountName.lastIndexOf('@') + 1), false);
         } catch (Exception e) {
             Log_OC.w(TAG, "Couldn't get display name for account, using old style");
@@ -294,8 +298,8 @@ public class DisplayUtils {
      * @param accountList the account array
      * @return set of account names
      */
-    public static Set<String> toAccountNameSet(Account[] accountList) {
-        Set<String> actualAccounts = new HashSet<>(accountList.length);
+    public static Set<String> toAccountNameSet(Collection<Account> accountList) {
+        Set<String> actualAccounts = new HashSet<>(accountList.size());
         for (Account account : accountList) {
             actualAccounts.add(account.name);
         }
@@ -303,7 +307,7 @@ public class DisplayUtils {
     }
 
     /**
-     * calculates the relative time string based on the given modificaion timestamp.
+     * calculates the relative time string based on the given modification timestamp.
      *
      * @param context the app's context
      * @param modificationTimestamp the UNIX timestamp of the file modification time.
@@ -313,6 +317,7 @@ public class DisplayUtils {
         return getRelativeDateTimeString(context, modificationTimestamp, DateUtils.SECOND_IN_MILLIS,
                 DateUtils.WEEK_IN_MILLIS, 0);
     }
+
 
     /**
      * determines the info level color based on certain thresholds
@@ -324,7 +329,12 @@ public class DisplayUtils {
      */
     public static int getRelativeInfoColor(Context context, int relative) {
         if (relative < RELATIVE_THRESHOLD_WARNING) {
-            return context.getResources().getColor(R.color.infolevel_info);
+            if (ThemeUtils.colorToHexString(ThemeUtils.primaryColor(context)).equalsIgnoreCase(
+                    ThemeUtils.colorToHexString(context.getResources().getColor(R.color.primary)))) {
+                return context.getResources().getColor(R.color.infolevel_info);
+            } else {
+                return Color.GRAY;
+            }
         } else if (relative >= RELATIVE_THRESHOLD_WARNING && relative < RELATIVE_THRESHOLD_CRITICAL) {
             return context.getResources().getColor(R.color.infolevel_warning);
         } else {
@@ -332,8 +342,8 @@ public class DisplayUtils {
         }
     }
 
-    public static CharSequence getRelativeDateTimeString(
-            Context c, long time, long minResolution, long transitionResolution, int flags) {
+    public static CharSequence getRelativeDateTimeString(Context c, long time, long minResolution,
+                                                         long transitionResolution, int flags) {
 
         CharSequence dateString = "";
 
@@ -342,7 +352,7 @@ public class DisplayUtils {
             return DisplayUtils.unixTimeToHumanReadable(time);
         }
         // < 60 seconds -> seconds ago
-        else if ((System.currentTimeMillis() - time) < 60 * 1000) {
+        else if ((System.currentTimeMillis() - time) < 60 * 1000 && minResolution == DateUtils.SECOND_IN_MILLIS) {
             return c.getString(R.string.file_list_seconds_ago);
         } else {
             dateString = DateUtils.getRelativeDateTimeString(c, time, minResolution, transitionResolution, flags);
@@ -356,7 +366,7 @@ public class DisplayUtils {
                 return parts[1];
             }
         }
-        //dateString contains unexpected format. fallback: use relative date time string from android api as is.
+        // dateString contains unexpected format. fallback: use relative date time string from android api as is.
         return dateString.toString();
     }
 
@@ -369,8 +379,9 @@ public class DisplayUtils {
 
         // Remove last slash from path
         if (path.length() > 1 && path.charAt(path.length() - 1) == OCFile.PATH_SEPARATOR.charAt(0)) {
-            path = path.substring(0, path.length() - 1);
+            return path.substring(0, path.length() - 1);
         }
+
         return path;
     }
 
@@ -389,81 +400,6 @@ public class DisplayUtils {
     }
 
     /**
-     * sets the coloring of the given progress bar to color_accent.
-     *
-     * @param progressBar the progress bar to be colored
-     */
-    public static void colorPreLollipopHorizontalProgressBar(ProgressBar progressBar) {
-        if (progressBar != null && Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
-            colorHorizontalProgressBar(progressBar, progressBar.getResources().getColor(R.color.color_accent));
-        }
-    }
-
-    /**
-     * sets the tinting of the given ImageButton's icon to color_accent.
-     *
-     * @param imageButton the image button who's icon should be colored
-     */
-    public static void colorImageButton(ImageButton imageButton, @ColorInt int color) {
-        if (imageButton != null) {
-            imageButton.setColorFilter(color, PorterDuff.Mode.SRC_ATOP);
-        }
-    }
-
-    /**
-     * sets the coloring of the given progress bar to color_accent.
-     *
-     * @param progressBar the progress bar to be colored
-     * @param color       the color to be used
-     */
-    public static void colorHorizontalProgressBar(ProgressBar progressBar, @ColorInt int color) {
-        if (progressBar != null) {
-            progressBar.getIndeterminateDrawable().setColorFilter(color, PorterDuff.Mode.SRC_IN);
-            progressBar.getProgressDrawable().setColorFilter(color, PorterDuff.Mode.SRC_IN);
-        }
-    }
-
-    /**
-     * sets the coloring of the given seek bar to color_accent.
-     *
-     * @param seekBar the seek bar to be colored
-     */
-    public static void colorPreLollipopHorizontalSeekBar(SeekBar seekBar) {
-        if (seekBar != null && Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
-            colorPreLollipopHorizontalProgressBar(seekBar);
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
-                int color = seekBar.getResources().getColor(R.color.color_accent);
-                seekBar.getThumb().setColorFilter(color, PorterDuff.Mode.SRC_IN);
-                seekBar.getThumb().setColorFilter(color, PorterDuff.Mode.SRC_IN);
-            }
-        }
-    }
-
-    /**
-     * set the Nextcloud standard colors for the snackbar.
-     *
-     * @param context  the context relevant for setting the color according to the context's theme
-     * @param snackbar the snackbar to be colored
-     */
-    public static void colorSnackbar(Context context, Snackbar snackbar) {
-        // Changing action button text color
-        snackbar.setActionTextColor(ContextCompat.getColor(context, R.color.white));
-    }
-
-    /**
-     * Sets the color of the status bar to {@code color} on devices with OS version lollipop or higher.
-     *
-     * @param fragmentActivity fragment activity
-     * @param color            the color
-     */
-    public static void colorStatusBar(FragmentActivity fragmentActivity, @ColorInt int color) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            fragmentActivity.getWindow().setStatusBarColor(color);
-        }
-    }
-
-    /**
      * styling of given spanText within a given text.
      *
      * @param text     the non styled complete text
@@ -471,23 +407,24 @@ public class DisplayUtils {
      * @param style    the style to be applied
      */
     public static SpannableStringBuilder createTextWithSpan(String text, String spanText, StyleSpan style) {
+        if (text == null) {
+            return null;
+        }
+
         SpannableStringBuilder sb = new SpannableStringBuilder(text);
+        if(spanText == null) {
+            return sb;
+        }
+
         int start = text.lastIndexOf(spanText);
+
+        if (start < 0) {
+            return sb;
+        }
+
         int end = start + spanText.length();
         sb.setSpan(style, start, end, Spannable.SPAN_INCLUSIVE_INCLUSIVE);
         return sb;
-    }
-
-    /**
-     * Sets the color of the progressbar to {@code color} within the given toolbar.
-     *
-     * @param activity         the toolbar activity instance
-     * @param progressBarColor the color to be used for the toolbar's progress bar
-     */
-    public static void colorToolbarProgressBar(FragmentActivity activity, int progressBarColor) {
-        if (activity instanceof ToolbarActivity) {
-            ((ToolbarActivity) activity).setProgressBarBackgroundColor(progressBarColor);
-        }
     }
 
     public interface AvatarGenerationListener {
@@ -497,48 +434,72 @@ public class DisplayUtils {
     }
 
     /**
-     * fetches and sets the avatar of the current account in the drawer in case the drawer is available.
+     * fetches and sets the avatar of the given account in the passed callContext
      *
-     * @param account        the account to be set in the drawer
+     * @param account        the account to be used to connect to server
      * @param avatarRadius   the avatar radius
      * @param resources      reference for density information
      * @param storageManager reference for caching purposes
+     * @param callContext    which context is called to set the generated avatar
      */
-    public static void setAvatar(Account account, AvatarGenerationListener listener, float avatarRadius, Resources resources,
-                                 FileDataStorageManager storageManager, Object callContext) {
-        if (account != null) {
-            if (callContext instanceof View) {
-                ((View) callContext).setContentDescription(account.name);
-            }
+    public static void setAvatar(@NonNull Account account, AvatarGenerationListener listener,
+                                 float avatarRadius, Resources resources, FileDataStorageManager storageManager,
+                                 Object callContext, Context context) {
 
-            // Thumbnail in Cache?
-            Bitmap thumbnail = ThumbnailsCacheManager.getBitmapFromDiskCache("a_" + account.name);
+        AccountManager accountManager = AccountManager.get(context);
+        String userId = accountManager.getUserData(account,
+                com.owncloud.android.lib.common.accounts.AccountUtils.Constants.KEY_USER_ID);
 
-            if (thumbnail != null) {
-                listener.avatarGenerated(
-                        BitmapUtils.bitmapToCircularBitmapDrawable(MainApp.getAppContext().getResources(), thumbnail),
-                        callContext);
-            } else {
-                // generate new avatar
-                if (ThumbnailsCacheManager.cancelPotentialAvatarWork(account.name, callContext)) {
-                    final ThumbnailsCacheManager.AvatarGenerationTask task =
-                            new ThumbnailsCacheManager.AvatarGenerationTask(listener, callContext, storageManager, account);
-                    if (thumbnail == null) {
-                        try {
-                            listener.avatarGenerated(TextDrawable.createAvatar(account.name, avatarRadius), callContext);
-                        } catch (Exception e) {
-                            Log_OC.e(TAG, "Error calculating RGB value for active account icon.", e);
-                            listener.avatarGenerated(resources.getDrawable(R.drawable.ic_account_circle), callContext);
-                        }
-                    } else {
-                        final ThumbnailsCacheManager.AsyncAvatarDrawable asyncDrawable =
-                                new ThumbnailsCacheManager.AsyncAvatarDrawable(resources, thumbnail, task);
-                        listener.avatarGenerated(BitmapUtils.bitmapToCircularBitmapDrawable(
-                                resources, asyncDrawable.getBitmap()), callContext);
-                    }
-                    task.execute(account.name);
-                }
+        setAvatar(account, userId, listener, avatarRadius, resources, storageManager, callContext, context);
+    }
+
+    /**
+     * fetches and sets the avatar of the given account in the passed callContext
+     *
+     * @param account        the account to be used to connect to server
+     * @param userId         the userId which avatar should be set
+     * @param avatarRadius   the avatar radius
+     * @param resources      reference for density information
+     * @param storageManager reference for caching purposes
+     * @param callContext    which context is called to set the generated avatar
+     */
+    public static void setAvatar(@NonNull Account account, @NonNull String userId, AvatarGenerationListener listener,
+                                 float avatarRadius, Resources resources, FileDataStorageManager storageManager,
+                                 Object callContext, Context context) {
+        if (callContext instanceof View) {
+            ((View) callContext).setContentDescription(account.name);
+        }
+
+        ArbitraryDataProvider arbitraryDataProvider = new ArbitraryDataProvider(context.getContentResolver());
+
+        String serverName = account.name.substring(account.name.lastIndexOf('@') + 1, account.name.length());
+        String eTag = arbitraryDataProvider.getValue(userId + "@" + serverName, ThumbnailsCacheManager.AVATAR);
+        String avatarKey = "a_" + userId + "_" + serverName + "_" + eTag;
+
+        // first show old one
+        Drawable avatar = BitmapUtils.bitmapToCircularBitmapDrawable(resources,
+                ThumbnailsCacheManager.getBitmapFromDiskCache(avatarKey));
+
+        // if no one exists, show colored icon with initial char
+        if (avatar == null) {
+            try {
+                avatar = TextDrawable.createAvatarByUserId(userId, avatarRadius);
+            } catch (Exception e) {
+                Log_OC.e(TAG, "Error calculating RGB value for active account icon.", e);
+                avatar = resources.getDrawable(R.drawable.account_circle_white);
             }
+        }
+
+        // check for new avatar, eTag is compared, so only new one is downloaded
+        if (ThumbnailsCacheManager.cancelPotentialAvatarWork(userId, callContext)) {
+            final ThumbnailsCacheManager.AvatarGenerationTask task =
+                    new ThumbnailsCacheManager.AvatarGenerationTask(listener, callContext, storageManager,
+                            account, resources, avatarRadius, userId, serverName, context);
+
+            final ThumbnailsCacheManager.AsyncAvatarDrawable asyncDrawable =
+                    new ThumbnailsCacheManager.AsyncAvatarDrawable(resources, avatar, task);
+            listener.avatarGenerated(asyncDrawable, callContext);
+            task.execute(userId);
         }
     }
 
@@ -586,6 +547,21 @@ public class DisplayUtils {
                 .diskCacheStrategy(DiskCacheStrategy.SOURCE)
                 .load(uri)
                 .into(imageView);
+    }
+
+    public static Bitmap downloadImageSynchronous(Context context, String imageUrl) {
+        try {
+            return Glide.with(context)
+                    .load(imageUrl)
+                    .asBitmap()
+                    .diskCacheStrategy(DiskCacheStrategy.NONE)
+                    .skipMemoryCache(true)
+                    .into(Target.SIZE_ORIGINAL, Target.SIZE_ORIGINAL)
+                    .get();
+        } catch (Exception e) {
+            Log_OC.e(TAG, "Could not download image " + imageUrl);
+            return null;
+        }
     }
 
     public static void setupBottomBar(BottomNavigationView view, Resources resources, final Activity activity,
@@ -674,27 +650,79 @@ public class DisplayUtils {
      *
      * @param inputStream        The File InputStream
      */
-    public static String getData(InputStream inputStream){
+    public static String getData(InputStream inputStream) {
 
         BufferedReader buffreader = new BufferedReader(new InputStreamReader(inputStream));
         String line;
         StringBuilder text = new StringBuilder();
         try {
-            while (( line = buffreader.readLine()) != null) {
+            while ((line = buffreader.readLine()) != null) {
                 text.append(line);
                 text.append('\n');
             }
         } catch (IOException e) {
-            Log_OC.e(TAG,e.getMessage());
+            Log_OC.e(TAG, e.getMessage());
         }
         return text.toString();
     }
 
-    public static Drawable tintDrawable(@DrawableRes int id, @ColorRes int color) {
-        Drawable drawable = ResourcesCompat.getDrawable(MainApp.getAppContext().getResources(), id, null);
-        drawable = DrawableCompat.wrap(drawable);
-        DrawableCompat.setTint(drawable, MainApp.getAppContext().getResources().getColor(color));
-        return drawable;
+    /**
+     * Show a temporary message in a Snackbar bound to the content view.
+     *
+     * @param activity Activity to which's content view the Snackbar is bound.
+     * @param messageResource Message to show.
+     */
+    public static void showSnackMessage(Activity activity, @StringRes int messageResource) {
+        Snackbar.make(activity.findViewById(android.R.id.content), messageResource, Snackbar.LENGTH_LONG).show();
+    }
+
+    /**
+     * Show a temporary message in a Snackbar bound to the content view.
+     *
+     * @param activity        Activity to which's content view the Snackbar is bound.
+     * @param messageResource Resource id for the format string - message to show.
+     * @param formatArgs      The format arguments that will be used for substitution.
+     */
+    public static void showSnackMessage(Activity activity, @StringRes int messageResource, Object... formatArgs) {
+        Snackbar.make(
+                activity.findViewById(android.R.id.content),
+                String.format(activity.getString(messageResource, formatArgs)),
+                Snackbar.LENGTH_LONG)
+                .show();
+    }
+
+    /**
+     * Show a temporary message in a Snackbar bound to the content view.
+     *
+     * @param activity Activity to which's content view the Snackbar is bound.
+     * @param message Message to show.
+     */
+    public static void showSnackMessage(Activity activity, String message) {
+        Snackbar.make(activity.findViewById(android.R.id.content), message, Snackbar.LENGTH_LONG).show();
+    }
+
+    // Solution inspired by https://stackoverflow.com/questions/34936590/why-isnt-my-vector-drawable-scaling-as-expected
+    // Copied from https://raw.githubusercontent.com/nextcloud/talk-android/8ec8606bc61878e87e3ac8ad32c8b72d4680013c/app/src/main/java/com/nextcloud/talk/utils/DisplayUtils.java
+    // under GPL3
+    public static void useCompatVectorIfNeeded() {
+        if (Build.VERSION.SDK_INT < 23) {
+            try {
+                @SuppressLint("RestrictedApi") AppCompatDrawableManager drawableManager = AppCompatDrawableManager.get();
+                Class<?> inflateDelegateClass = Class.forName("android.support.v7.widget.AppCompatDrawableManager$InflateDelegate");
+                Class<?> vdcInflateDelegateClass = Class.forName("android.support.v7.widget.AppCompatDrawableManager$VdcInflateDelegate");
+
+                Constructor<?> constructor = vdcInflateDelegateClass.getDeclaredConstructor();
+                constructor.setAccessible(true);
+                Object vdcInflateDelegate = constructor.newInstance();
+
+                Class<?> args[] = {String.class, inflateDelegateClass};
+                Method addDelegate = AppCompatDrawableManager.class.getDeclaredMethod("addDelegate", args);
+                addDelegate.setAccessible(true);
+                addDelegate.invoke(drawableManager, "vector", vdcInflateDelegate);
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to use reflection to enable proper vector scaling");
+            }
+        }
     }
 
 }

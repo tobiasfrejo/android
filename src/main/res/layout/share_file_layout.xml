@@ -41,6 +41,8 @@
                 android:layout_height="@dimen/file_icon_size"
                 android:layout_gravity="center_vertical"
                 android:layout_marginRight="@dimen/standard_half_margin"
+                android:layout_marginEnd="@dimen/standard_half_margin"
+                android:contentDescription="@string/share_file_icon"
                 android:src="@drawable/file"/>
 
             <TextView
@@ -66,9 +68,10 @@
                 android:layout_below="@+id/shareFileName"
                 android:layout_gravity="center_vertical"
                 android:layout_marginLeft="@dimen/standard_quarter_margin"
+                android:layout_marginStart="@dimen/standard_quarter_margin"
                 android:layout_toEndOf="@+id/shareFileIcon"
                 android:layout_toRightOf="@+id/shareFileIcon"
-                android:text="@string/placeholder_filesize"
+                android:text="@string/placeholder_fileSize"
                 android:textSize="@dimen/share_file_layout_text_size"/>
 
         </RelativeLayout>
@@ -92,7 +95,7 @@
 
             <TextView
                 android:id="@+id/shareWithUsersSectionTitle"
-                style="?android:attr/listSeparatorTextViewStyle"
+                style="@style/TextAppearance.AppCompat.Body2"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_gravity="start"
@@ -104,7 +107,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="0dip"
                 android:layout_weight="1"
+                android:paddingStart="@dimen/standard_half_padding"
                 android:paddingLeft="@dimen/standard_half_padding"
+                android:paddingEnd="@dimen/standard_half_padding"
+                android:paddingRight="@dimen/zero"
                 android:scrollbars="vertical"
                 android:visibility="gone"/>
 
@@ -122,7 +128,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_horizontal"
-                android:contentDescription="shareAddUserButton"
+                android:contentDescription="@string/share_add_user_or_group"
                 android:text="@string/share_add_user_or_group"
                 android:theme="@style/Button.Primary"/>
 
@@ -140,13 +146,16 @@
 
             <android.support.v7.widget.SwitchCompat
                 android:id="@+id/shareViaLinkSectionSwitch"
-                style="?android:attr/listSeparatorTextViewStyle"
+                style="@style/TextAppearance.AppCompat.Body2"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_gravity="start"
                 android:layout_marginTop="@dimen/standard_half_margin"
                 android:checked="false"
                 android:paddingRight="@dimen/standard_half_padding"
+                android:paddingEnd="@dimen/standard_half_padding"
+                android:paddingLeft="@dimen/zero"
+                android:paddingStart="@dimen/zero"
                 android:text="@string/share_via_link_section_title"
                 android:textColor="@color/color_accent"/>
 
@@ -160,7 +169,7 @@
                     android:id="@+id/shareViaLinkEditPermissionSection"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:visibility="invisible"
+                    android:visibility="gone"
                     android:layout_marginBottom="@dimen/standard_half_margin"
                     >
 
@@ -194,8 +203,8 @@
                     android:id="@+id/shareViaLinkHideFileListingPermissionSection"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:visibility="gone"
                     android:layout_marginBottom="@dimen/standard_half_margin"
-                    android:visibility="invisible"
                     >
 
                     <android.support.v7.widget.SwitchCompat
@@ -330,7 +339,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center_horizontal"
-                    android:contentDescription="shareGetLinkButton"
+                    android:contentDescription="@string/share_get_public_link_button"
                     android:text="@string/share_get_public_link_button"
                     android:theme="@style/Button.Primary"/>
 

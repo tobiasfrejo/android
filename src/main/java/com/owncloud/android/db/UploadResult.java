@@ -35,7 +35,11 @@ public enum UploadResult {
     DELAYED_FOR_WIFI(9),
     SERVICE_INTERRUPTED(10),
     DELAYED_FOR_CHARGING(11),
-    MAINTENANCE_MODE(12);
+    MAINTENANCE_MODE(12),
+    LOCK_FAILED(13),
+    DELAYED_IN_POWER_SAVE_MODE(14),
+    SSL_RECOVERABLE_PEER_UNVERIFIED(15),
+    VIRUS_DETECTED(16);
 
     private final int value;
 
@@ -77,6 +81,14 @@ public enum UploadResult {
                 return DELAYED_FOR_CHARGING;
             case 12:
                 return MAINTENANCE_MODE;
+            case 13:
+                return LOCK_FAILED;
+            case 14:
+                return DELAYED_IN_POWER_SAVE_MODE;
+            case 15:
+                return SSL_RECOVERABLE_PEER_UNVERIFIED;
+            case 16:
+                return VIRUS_DETECTED;
         }
         return null;
     }
@@ -92,7 +104,6 @@ public enum UploadResult {
             case WRONG_CONNECTION:
             case INCORRECT_ADDRESS:
             case SSL_ERROR:
-            case SSL_RECOVERABLE_PEER_UNVERIFIED:
                 return NETWORK_CONNECTION;
             case ACCOUNT_EXCEPTION:
             case UNAUTHORIZED:
@@ -113,16 +124,23 @@ public enum UploadResult {
                 return DELAYED_FOR_WIFI;
             case DELAYED_FOR_CHARGING:
                 return DELAYED_FOR_CHARGING;
+            case DELAYED_IN_POWER_SAVE_MODE:
+                return DELAYED_IN_POWER_SAVE_MODE;
+            case MAINTENANCE_MODE:
+                return MAINTENANCE_MODE;
+            case SSL_RECOVERABLE_PEER_UNVERIFIED:
+                return SSL_RECOVERABLE_PEER_UNVERIFIED;
             case UNKNOWN_ERROR:
                 if (result.getException() instanceof java.io.FileNotFoundException) {
                     return FILE_ERROR;
                 }
                 return UNKNOWN;
-            case MAINTENANCE_MODE:
-                return MAINTENANCE_MODE;
+            case LOCK_FAILED:
+                return LOCK_FAILED;
+            case VIRUS_DETECTED:
+                return VIRUS_DETECTED;
             default:
                 return UNKNOWN;
         }
-
     }
 }

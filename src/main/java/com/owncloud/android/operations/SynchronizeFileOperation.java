@@ -247,6 +247,7 @@ public class SynchronizeFileOperation extends SyncOperation {
                         // service when the upload finishes
                     } else {
                         // TODO CHECK: is this really useful in some point in the code?
+                        mServerFile.setFavorite(mLocalFile.getIsFavorite());
                         mServerFile.setAvailableOffline(mLocalFile.isAvailableOffline());
                         mServerFile.setLastSyncDateForData(mLocalFile.getLastSyncDateForData());
                         mServerFile.setStoragePath(mLocalFile.getStoragePath());
@@ -299,7 +300,12 @@ public class SynchronizeFileOperation extends SyncOperation {
         Intent i = new Intent(mContext, FileDownloader.class);
         i.putExtra(FileDownloader.EXTRA_ACCOUNT, mAccount);
         i.putExtra(FileDownloader.EXTRA_FILE, file);
-        mContext.startService(i);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            mContext.startForegroundService(i);
+        } else {
+            mContext.startService(i);
+        }
+
         mTransferWasRequested = true;
     }
 

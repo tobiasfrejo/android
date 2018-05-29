@@ -1,4 +1,4 @@
-/**
+/*
  *   ownCloud Android client application
  *
  *   @author David A. Velasco
@@ -37,6 +37,7 @@ import android.media.MediaPlayer.OnPreparedListener;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.support.annotation.DrawableRes;
+import android.support.annotation.NonNull;
 import android.support.annotation.StringRes;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -62,10 +63,10 @@ import com.owncloud.android.media.MediaControlView;
 import com.owncloud.android.media.MediaService;
 import com.owncloud.android.media.MediaServiceBinder;
 import com.owncloud.android.ui.activity.FileActivity;
+import com.owncloud.android.ui.activity.FileDisplayActivity;
 import com.owncloud.android.ui.dialog.ConfirmationDialogFragment;
 import com.owncloud.android.ui.dialog.RemoveFilesDialogFragment;
 import com.owncloud.android.ui.fragment.FileFragment;
-import com.owncloud.android.utils.AnalyticsUtils;
 import com.owncloud.android.utils.MimeTypeUtil;
 
 
@@ -86,7 +87,6 @@ public class PreviewMediaFragment extends FileFragment implements
     private static final String EXTRA_PLAY_POSITION = "PLAY_POSITION";
     private static final String EXTRA_PLAYING = "PLAYING";
 
-    private View mView;
     private Account mAccount;
     private ImageView mImagePreview;
     private VideoView mVideoPreview;
@@ -104,14 +104,16 @@ public class PreviewMediaFragment extends FileFragment implements
     private MediaServiceBinder mMediaServiceBinder = null;
     private MediaControlView mMediaController = null;
     private MediaServiceConnection mMediaServiceConnection = null;
-    private VideoHelper mVideoHelper;
     private boolean mAutoplay;
     private static boolean mOnResume = false;
     public boolean mPrepared;
 
     private static final String TAG = PreviewMediaFragment.class.getSimpleName();
 
-    private static final String SCREEN_NAME = "Audio/Video Preview";
+    private static final String FILE = "FILE";
+    private static final String ACCOUNT = "ACCOUNT";
+    private static final String PLAYBACK_POSITION = "PLAYBACK_POSITION";
+    private static final String AUTOPLAY = "AUTOPLAY";
 
     /**
      * Creates a fragment to preview a file.
@@ -121,16 +123,19 @@ public class PreviewMediaFragment extends FileFragment implements
      * @param fileToDetail An {@link OCFile} to preview in the fragment
      * @param ocAccount    An ownCloud account; needed to start downloads
      */
-    public PreviewMediaFragment(
-            OCFile fileToDetail,
-            Account ocAccount,
-            int startPlaybackPosition,
-            boolean autoplay) {
+    public static PreviewMediaFragment newInstance(OCFile fileToDetail, Account ocAccount, int startPlaybackPosition,
+                                                   boolean autoplay) {
+        PreviewMediaFragment previewMediaFragment = new PreviewMediaFragment();
 
-        super(fileToDetail);
-        mAccount = ocAccount;
-        mSavedPlaybackPosition = startPlaybackPosition;
-        mAutoplay = autoplay;
+        Bundle bundle = new Bundle();
+        bundle.putParcelable(FILE, fileToDetail);
+        bundle.putParcelable(ACCOUNT, ocAccount);
+        bundle.putInt(PLAYBACK_POSITION, startPlaybackPosition);
+        bundle.putBoolean(AUTOPLAY, autoplay);
+
+        previewMediaFragment.setArguments(bundle);
+
+        return previewMediaFragment;
     }
 
     /**
@@ -157,6 +162,13 @@ public class PreviewMediaFragment extends FileFragment implements
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setHasOptionsMenu(true);
+
+        Bundle bundle = getArguments();
+
+        setFile(bundle.getParcelable(FILE));
+        mAccount = bundle.getParcelable(ACCOUNT);
+        mSavedPlaybackPosition = bundle.getInt(PLAYBACK_POSITION);
+        mAutoplay = bundle.getBoolean(AUTOPLAY);
     }
 
 
@@ -164,34 +176,33 @@ public class PreviewMediaFragment extends FileFragment implements
      * {@inheritDoc}
      */
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         super.onCreateView(inflater, container, savedInstanceState);
         Log_OC.v(TAG, "onCreateView");
 
 
-        mView = inflater.inflate(R.layout.file_preview, container, false);
+        View view = inflater.inflate(R.layout.file_preview, container, false);
 
-        mPreviewContainer = (RelativeLayout) mView.findViewById(R.id.file_preview_container);
-        mImagePreview = (ImageView) mView.findViewById(R.id.image_preview);
-        mVideoPreview = (VideoView) mView.findViewById(R.id.video_preview);
+        mPreviewContainer = view.findViewById(R.id.file_preview_container);
+        mImagePreview = view.findViewById(R.id.image_preview);
+        mVideoPreview = view.findViewById(R.id.video_preview);
         mVideoPreview.setOnTouchListener(this);
 
-        mMediaController = (MediaControlView) mView.findViewById(R.id.media_controller);
-        mMultiView = (RelativeLayout) mView.findViewById(R.id.multi_view);
+        mMediaController = view.findViewById(R.id.media_controller);
+        mMultiView = view.findViewById(R.id.multi_view);
 
-        setupMultiView(mView);
+        setupMultiView(view);
         setMultiListLoadingMessage();
-        return mView;
+        return view;
     }
 
 
     protected void setupMultiView(View view) {
-        mMultiListContainer = (LinearLayout) view.findViewById(R.id.empty_list_view);
-        mMultiListMessage = (TextView) view.findViewById(R.id.empty_list_view_text);
-        mMultiListHeadline = (TextView) view.findViewById(R.id.empty_list_view_headline);
-        mMultiListIcon = (ImageView) view.findViewById(R.id.empty_list_icon);
-        mMultiListProgress = (ProgressBar) view.findViewById(R.id.empty_list_progress);
+        mMultiListContainer = view.findViewById(R.id.empty_list_view);
+        mMultiListMessage = view.findViewById(R.id.empty_list_view_text);
+        mMultiListHeadline = view.findViewById(R.id.empty_list_view_headline);
+        mMultiListIcon = view.findViewById(R.id.empty_list_icon);
+        mMultiListProgress = view.findViewById(R.id.empty_list_progress);
     }
 
     private void setMultiListLoadingMessage() {
@@ -286,7 +297,7 @@ public class PreviewMediaFragment extends FileFragment implements
      * {@inheritDoc}
      */
     @Override
-    public void onSaveInstanceState(Bundle outState) {
+    public void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
         Log_OC.v(TAG, "onSaveInstanceState");
 
@@ -360,14 +371,22 @@ public class PreviewMediaFragment extends FileFragment implements
                 getFile(),
                 mContainerActivity.getStorageManager().getAccount(),
                 mContainerActivity,
-                getActivity()
+                getActivity(),
+                false
             );
-            mf.filter(menu);
+            mf.filter(menu, true);
         }
 
         // additional restriction for this fragment 
         // TODO allow renaming in PreviewImageFragment
         MenuItem item = menu.findItem(R.id.action_rename_file);
+        if (item != null) {
+            item.setVisible(false);
+            item.setEnabled(false);
+        }
+
+        // additional restriction for this fragment
+        item = menu.findItem(R.id.action_select_all);
         if (item != null) {
             item.setVisible(false);
             item.setEnabled(false);
@@ -401,6 +420,15 @@ public class PreviewMediaFragment extends FileFragment implements
             item.setEnabled(false);
         }
 
+        if(getFile().isSharedWithMe() && !getFile().canReshare()){
+            // additional restriction for this fragment
+            item = menu.findItem(R.id.action_send_share_file);
+            if(item != null){
+                item.setVisible(false);
+                item.setEnabled(false);
+            }
+        }
+
     }
 
 
@@ -410,8 +438,8 @@ public class PreviewMediaFragment extends FileFragment implements
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
-            case R.id.action_share_file: {
-                seeShareFile();
+            case R.id.action_send_share_file: {
+                sendShareFile();
                 return true;
             }
             case R.id.action_open_file_with: {
@@ -425,10 +453,6 @@ public class PreviewMediaFragment extends FileFragment implements
             }
             case R.id.action_see_details: {
                 seeDetails();
-                return true;
-            }
-            case R.id.action_send_file: {
-                sendFile();
                 return true;
             }
             case R.id.action_sync_file: {
@@ -450,28 +474,22 @@ public class PreviewMediaFragment extends FileFragment implements
         setFile(file);
     }
 
-    private void sendFile() {
-        stopPreview(false);
-        mContainerActivity.getFileOperationsHelper().sendDownloadedFile(getFile());
-
-    }
-
     private void seeDetails() {
         stopPreview(false);
         mContainerActivity.showDetails(getFile());
     }
 
-    private void seeShareFile() {
+    private void sendShareFile() {
         stopPreview(false);
-        mContainerActivity.getFileOperationsHelper().showShareFile(getFile());
+        mContainerActivity.getFileOperationsHelper().sendShareFile(getFile());
     }
 
     private void prepareVideo() {
         // create helper to get more control on the playback
-        mVideoHelper = new VideoHelper();
-        mVideoPreview.setOnPreparedListener(mVideoHelper);
-        mVideoPreview.setOnCompletionListener(mVideoHelper);
-        mVideoPreview.setOnErrorListener(mVideoHelper);
+        VideoHelper videoHelper = new VideoHelper();
+        mVideoPreview.setOnPreparedListener(videoHelper);
+        mVideoPreview.setOnCompletionListener(videoHelper);
+        mVideoPreview.setOnErrorListener(videoHelper);
     }
 
     @SuppressWarnings("static-access")
@@ -560,9 +578,6 @@ public class PreviewMediaFragment extends FileFragment implements
         super.onResume();
         mOnResume = !mOnResume;
 
-        if (getActivity() != null) {
-            AnalyticsUtils.setCurrentScreenName(getActivity(), SCREEN_NAME, TAG);
-        }
         Log_OC.v(TAG, "onResume");
     }
 
@@ -660,6 +675,8 @@ public class PreviewMediaFragment extends FileFragment implements
                                     mMediaServiceConnection,
                                     Context.BIND_AUTO_CREATE);
             // follow the flow in MediaServiceConnection#onServiceConnected(...)
+
+        ((FileDisplayActivity) getActivity()).setMediaServiceConnection();
     }
 
     /** Defines callbacks for service binding, passed to bindService() */

@@ -20,14 +20,12 @@
 package com.owncloud.android.utils;
 
 import android.accounts.Account;
-import android.content.Context;
-import android.content.SharedPreferences;
 import android.net.Uri;
-import android.preference.PreferenceManager;
+import android.util.Log;
 import android.webkit.MimeTypeMap;
 
 import com.owncloud.android.MainApp;
-import com.owncloud.android.R;
+import com.owncloud.android.datamodel.FileDataStorageManager;
 import com.owncloud.android.datamodel.OCFile;
 import com.owncloud.android.lib.common.utils.Log_OC;
 import com.owncloud.android.lib.resources.files.RemoteFile;
@@ -40,18 +38,13 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
-import java.util.Vector;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import third_parties.daveKoeller.AlphanumComparator;
 
 
 /**
@@ -60,12 +53,7 @@ import third_parties.daveKoeller.AlphanumComparator;
 public class FileStorageUtils {
     private static final String TAG = FileStorageUtils.class.getSimpleName();
 
-    public static final Integer SORT_NAME = 0;
-    public static final Integer SORT_DATE = 1;
-    public static final Integer SORT_SIZE = 2;
     public static final String PATTERN_YYYY_MM = "yyyy/MM/";
-    public static Integer mSortOrder = SORT_NAME;
-    public static Boolean mSortAscending = true;
 
     /**
      * Get local owncloud storage path for accountName.
@@ -86,7 +74,7 @@ public class FileStorageUtils {
      * file.
      */
     public static String getDefaultSavePathFor(String accountName, OCFile file) {
-        return getSavePath(accountName) + file.getRemotePath();
+        return getSavePath(accountName) + file.getDecryptedRemotePath();
     }
 
     /**
@@ -135,18 +123,6 @@ public class FileStorageUtils {
         return df.format(d);
     }
 
-    private static String getSubpathFromDate(long date) {
-        if (date == 0) {
-            return "";
-        }
-
-        Date d = new Date(date);
-
-        DateFormat df = new SimpleDateFormat(PATTERN_YYYY_MM);
-
-        return df.format(d);
-    }
-
     /**
      * Returns the InstantUploadFilePath on the nextcloud instance
      *
@@ -167,36 +143,6 @@ public class FileStorageUtils {
         return remotePath + OCFile.PATH_SEPARATOR + subPath + (fileName == null ? "" : fileName);
     }
 
-    public static String getInstantUploadFilePath(String remotePath,
-                                                  String fileName,
-                                                  long dateTaken,
-                                                  Boolean subfolderByDate) {
-        String subPath = "";
-        if (subfolderByDate) {
-            subPath = getSubpathFromDate(dateTaken);
-        }
-
-        return remotePath + OCFile.PATH_SEPARATOR + subPath + (fileName == null ? "" : fileName);
-    }
-
-
-    /**
-     * Gets the composed path when video is or must be stored.
-     *
-     * @param context app context
-     * @param fileName: video file name
-     * @return String: video file path composed
-     */
-    public static String getInstantVideoUploadFilePath(Context context, String fileName, long dateTaken) {
-        SharedPreferences pref = PreferenceManager.getDefaultSharedPreferences(context);
-        String uploadVideoPathdef = context.getString(R.string.instant_upload_path);
-        String uploadVideoPath = pref.getString("instant_video_upload_path", uploadVideoPathdef);
-        String subPath = "";
-        if (com.owncloud.android.db.PreferenceManager.instantVideoUploadPathUseSubfolders(context)) {
-            subPath = getSubpathFromDate(dateTaken);
-        }
-        return uploadVideoPath + OCFile.PATH_SEPARATOR + subPath + (fileName == null ? "" : fileName);
-    }
 
     public static String getParentPath(String remotePath) {
         String parentPath = new File(remotePath).getParent();
@@ -224,6 +170,10 @@ public class FileStorageUtils {
         file.setPermissions(remote.getPermissions());
         file.setRemoteId(remote.getRemoteId());
         file.setFavorite(remote.getIsFavorite());
+        if (file.isFolder()) {
+            file.setEncrypted(remote.getIsEncrypted());
+        }
+        file.setMountType(remote.getMountType());
         return file;
     }
 
@@ -246,237 +196,17 @@ public class FileStorageUtils {
         return file;
     }
 
-    public static Vector<OCFile> sortOcFolderDescDateModified(Vector<OCFile> files) {
+    public static List<OCFile> sortOcFolderDescDateModified(List<OCFile> files) {
         final int multiplier = -1;
-        Collections.sort(files, new Comparator<OCFile>() {
+        Collections.sort(files, (o1, o2) -> {
             @SuppressFBWarnings(value = "Bx", justification = "Would require stepping up API level")
-            public int compare(OCFile o1, OCFile o2) {
-                Long obj1 = o1.getModificationTimestamp();
-                return multiplier * obj1.compareTo(o2.getModificationTimestamp());
-            }
+            Long obj1 = o1.getModificationTimestamp();
+            return multiplier * obj1.compareTo(o2.getModificationTimestamp());
         });
 
-        return sortOCFilesByFavourite(files);
+        return FileSortOrder.sortCloudFilesByFavourite(files);
     }
 
-    /**
-     * Sorts all filenames, regarding last user decision 
-     */
-    public static Vector<OCFile> sortOcFolder(Vector<OCFile> files) {
-        switch (mSortOrder) {
-            case 0:
-                files = FileStorageUtils.sortOCFilesByName(files);
-                break;
-            case 1:
-                files = FileStorageUtils.sortOCFilesByDate(files);
-                break;
-            case 2:
-                files = FileStorageUtils.sortOCFilesBySize(files);
-                break;
-        }
-
-        files = FileStorageUtils.sortOCFilesByFavourite(files);
-
-        return files;
-    }
-
-    /**
-     * Sorts all filenames, regarding last user decision.
-     *
-     * @param files of files to sort
-     */
-    public static File[] sortLocalFolder(File[] files) {
-        switch (mSortOrder) {
-            case 0:
-                files = FileStorageUtils.sortLocalFilesByName(files);
-                break;
-            case 1:
-                files = FileStorageUtils.sortLocalFilesByDate(files);
-                break;
-            case 2:
-                files = FileStorageUtils.sortLocalFilesBySize(files);
-                break;
-        }
-
-        return files;
-    }
-
-    /**
-     * Sorts list by Date.
-     *
-     * @param files list of files to sort
-     */
-    public static Vector<OCFile> sortOCFilesByDate(Vector<OCFile> files) {
-        final int multiplier = mSortAscending ? 1 : -1;
-
-        Collections.sort(files, new Comparator<OCFile>() {
-            @SuppressFBWarnings(value = "Bx", justification = "Would require stepping up API level")
-            public int compare(OCFile o1, OCFile o2) {
-                Long obj1 = o1.getModificationTimestamp();
-                return multiplier * obj1.compareTo(o2.getModificationTimestamp());
-            }
-        });
-
-        return files;
-    }
-
-    /**
-     * Sorts list by Date.
-     *
-     * @param filesArray list of files to sort
-     */
-    public static File[] sortLocalFilesByDate(File[] filesArray) {
-        final int multiplier = mSortAscending ? 1 : -1;
-
-        List<File> files = new ArrayList<File>(Arrays.asList(filesArray));
-
-        Collections.sort(files, new Comparator<File>() {
-            @SuppressFBWarnings(value = "Bx")
-            public int compare(File o1, File o2) {
-                Long obj1 = o1.lastModified();
-                return multiplier * obj1.compareTo(o2.lastModified());
-            }
-        });
-
-        File[] returnArray = new File[files.size()];
-        return files.toArray(returnArray);
-    }
-
-    /**
-     * Sorts list by Size.
-     *
-     * @param files list of files to sort
-     */
-    public static Vector<OCFile> sortOCFilesBySize(Vector<OCFile> files) {
-        final int multiplier = mSortAscending ? 1 : -1;
-
-        Collections.sort(files, new Comparator<OCFile>() {
-            @SuppressFBWarnings(value = "Bx")
-            public int compare(OCFile o1, OCFile o2) {
-                if (o1.isFolder() && o2.isFolder()) {
-                    Long obj1 = o1.getFileLength();
-                    return multiplier * obj1.compareTo(o2.getFileLength());
-                } else if (o1.isFolder()) {
-                    return -1;
-
-                } else if (o2.isFolder()) {
-                    return 1;
-                } else {
-                    Long obj1 = o1.getFileLength();
-                    return multiplier * obj1.compareTo(o2.getFileLength());
-                }
-            }
-        });
-
-        return files;
-    }
-
-    /**
-     * Sorts list by Size.
-     *
-     * @param filesArray list of files to sort
-     */
-    public static File[] sortLocalFilesBySize(File[] filesArray) {
-        final int multiplier = mSortAscending ? 1 : -1;
-
-        List<File> files = new ArrayList<>(Arrays.asList(filesArray));
-
-        Collections.sort(files, new Comparator<File>() {
-            @SuppressFBWarnings(value = "Bx")
-            public int compare(File o1, File o2) {
-                if (o1.isDirectory() && o2.isDirectory()) {
-                    // Long obj1 = getFolderSize(o1);
-                    // return multiplier * obj1.compareTo(getFolderSize(o2));
-                    return o1.getPath().toLowerCase().compareTo(o2.getPath().toLowerCase());
-                } else if (o1.isDirectory()) {
-                    return -1;
-                } else if (o2.isDirectory()) {
-                    return 1;
-                } else {
-                    Long obj1 = o1.length();
-                    return multiplier * obj1.compareTo(o2.length());
-                }
-            }
-        });
-
-        File[] returnArray = new File[files.size()];
-        return files.toArray(returnArray);
-    }
-
-    /**
-     * Sorts list by Name.
-     *
-     * @param files files to sort
-     */
-    @SuppressFBWarnings(value = "Bx")
-    public static Vector<OCFile> sortOCFilesByName(Vector<OCFile> files) {
-        final int multiplier = mSortAscending ? 1 : -1;
-
-        Collections.sort(files, new Comparator<OCFile>() {
-            public int compare(OCFile o1, OCFile o2) {
-                if (o1.isFolder() && o2.isFolder()) {
-                    return multiplier * new AlphanumComparator().compare(o1, o2);
-                } else if (o1.isFolder()) {
-                    return -1;
-                } else if (o2.isFolder()) {
-                    return 1;
-                }
-                return multiplier * new AlphanumComparator().compare(o1, o2);
-            }
-        });
-
-        return files;
-    }
-
-    /**
-     * Sorts list by Name.
-     *
-     * @param filesArray files to sort
-     */
-    public static File[] sortLocalFilesByName(File[] filesArray) {
-        final int multiplier = mSortAscending ? 1 : -1;
-
-        List<File> files = new ArrayList<File>(Arrays.asList(filesArray));
-
-        Collections.sort(files, new Comparator<File>() {
-            public int compare(File o1, File o2) {
-                if (o1.isDirectory() && o2.isDirectory()) {
-                    return multiplier * o1.getPath().toLowerCase().compareTo(o2.getPath().toLowerCase());
-                } else if (o1.isDirectory()) {
-                    return -1;
-                } else if (o2.isDirectory()) {
-                    return 1;
-                }
-                return multiplier * new AlphanumComparator().compare(o1.getPath().toLowerCase(),
-                        o2.getPath().toLowerCase());
-            }
-        });
-
-        File[] returnArray = new File[files.size()];
-        return files.toArray(returnArray);
-    }
-
-    /**
-     * Sorts list by Favourites.
-     *
-     * @param files files to sort
-     */
-    public static Vector<OCFile> sortOCFilesByFavourite(Vector<OCFile> files) {
-        Collections.sort(files, new Comparator<OCFile>() {
-            public int compare(OCFile o1, OCFile o2) {
-                if (o1.getIsFavorite() && o2.getIsFavorite()) {
-                    return 0;
-                } else if (o1.getIsFavorite()) {
-                    return -1;
-                } else if (o2.getIsFavorite()) {
-                    return 1;
-                }
-                return 0;
-            }
-        });
-
-        return files;
-    }
 
     /**
      * Local Folder size.
@@ -485,16 +215,20 @@ public class FileStorageUtils {
      * @return Size in bytes
      */
     public static long getFolderSize(File dir) {
-        if (dir.exists()) {
-            long result = 0;
-            for (File f : dir.listFiles()) {
-                if (f.isDirectory()) {
-                    result += getFolderSize(f);
-                } else {
-                    result += f.length();
+        if (dir.exists() && dir.isDirectory()) {
+            File[] files = dir.listFiles();
+
+            if (files != null) {
+                long result = 0;
+                for (File f : files) {
+                    if (f.isDirectory()) {
+                        result += getFolderSize(f);
+                    } else {
+                        result += f.length();
+                    }
                 }
+                return result;
             }
-            return result;
         }
         return 0;
     }
@@ -511,7 +245,7 @@ public class FileStorageUtils {
         if (pos >= 0) {
             extension = path.substring(pos + 1);
         }
-        String result = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.toLowerCase());
+        String result = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.toLowerCase(Locale.ROOT));
         return (result != null) ? result : "";
     }
 
@@ -579,4 +313,63 @@ public class FileStorageUtils {
         return ret;
     }
 
+    public static boolean moveFile(File sourceFile, File targetFile) throws IOException {
+        if (copyFile(sourceFile, targetFile)) {
+            return sourceFile.delete();
+        } else {
+            return false;
+        }
+    }
+
+    public static void deleteRecursively(File file, FileDataStorageManager storageManager) {
+        if (file.isDirectory()) {
+            for (File child : file.listFiles()) {
+                deleteRecursively(child, storageManager);
+            }
+        }
+
+        storageManager.deleteFileInMediaScan(file.getAbsolutePath());
+        file.delete();
+    }
+
+    public static boolean checkIfFileFinishedSaving(OCFile file) {
+        long lastModified = 0;
+        long lastSize = 0;
+        File realFile = new File(file.getStoragePath());
+
+        if (realFile.lastModified() != file.getModificationTimestamp() && realFile.length() != file.getFileLength()) {
+            while ((realFile.lastModified() != lastModified) && (realFile.length() != lastSize)) {
+                lastModified = realFile.lastModified();
+                lastSize = realFile.length();
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    Log.d(TAG, "Failed to sleep for a bit");
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Checks and returns true if file itself or ancestor is encrypted
+     *
+     * @param file           file to check
+     * @param storageManager up to date reference to storage manager
+     * @return true if file itself or ancestor is encrypted
+     */
+    public static boolean checkEncryptionStatus(OCFile file, FileDataStorageManager storageManager) {
+        if (file.isEncrypted()) {
+            return true;
+        }
+        
+        while (!OCFile.ROOT_PATH.equals(file.getRemotePath())) {
+            if (file.isEncrypted()) {
+                return true;
+            }
+            file = storageManager.getFileById(file.getParentId());
+        }
+        return false;
+    }
 }

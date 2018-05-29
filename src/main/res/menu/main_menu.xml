@@ -26,7 +26,7 @@
           android:title="@string/actionbar_search"
           android:contentDescription="@string/actionbar_search"
           app:actionViewClass="android.support.v7.widget.SearchView"
-          app:showAsAction="always"/>
+          app:showAsAction="ifRoom"/>
     <item
         android:id="@+id/action_create_dir"
         android:icon="@drawable/ic_action_create_dir"
@@ -54,6 +54,13 @@
         app:showAsAction="never"
         android:title="@string/actionbar_sort"
         android:contentDescription="@string/actionbar_sort"/>
+    <item
+        android:id="@+id/action_select_all"
+        android:icon="@drawable/ic_select_all"
+        android:orderInCategory="1"
+        app:showAsAction="never"
+        android:title="@string/select_all"
+        android:contentDescription="@string/select_all"/>
 
     <!-- <item android:id="@+id/search"
     android:title="@string/actionbar_search"

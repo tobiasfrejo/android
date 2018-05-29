@@ -1,4 +1,4 @@
-/**
+/*
  * Nextcloud Android client application
  *
  * @author Mario Danic
@@ -30,32 +30,41 @@ import android.app.Dialog;
 import android.app.DialogFragment;
 import android.app.FragmentManager;
 import android.content.ContentResolver;
-import android.content.DialogInterface;
 import android.content.Intent;
+import android.graphics.PorterDuff;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.LayerDrawable;
 import android.os.Bundle;
 import android.support.annotation.ColorInt;
+import android.support.annotation.DrawableRes;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.support.v4.content.ContextCompat;
+import android.support.annotation.StringRes;
 import android.support.v4.graphics.drawable.DrawableCompat;
+import android.support.v7.widget.DividerItemDecoration;
+import android.support.v7.widget.RecyclerView;
 import android.text.TextUtils;
+import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewGroup;
+import android.webkit.URLUtil;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.request.animation.GlideAnimation;
+import com.bumptech.glide.request.target.SimpleTarget;
 import com.google.gson.Gson;
 import com.owncloud.android.R;
 import com.owncloud.android.authentication.AccountUtils;
-import com.owncloud.android.authentication.AuthenticatorActivity;
 import com.owncloud.android.datamodel.ArbitraryDataProvider;
 import com.owncloud.android.datamodel.PushConfigurationState;
-import com.owncloud.android.datamodel.SyncedFolderProvider;
-import com.owncloud.android.datamodel.UploadsStorageManager;
 import com.owncloud.android.lib.common.UserInfo;
 import com.owncloud.android.lib.common.operations.RemoteOperation;
 import com.owncloud.android.lib.common.operations.RemoteOperationResult;
@@ -64,11 +73,15 @@ import com.owncloud.android.lib.resources.users.GetRemoteUserInfoOperation;
 import com.owncloud.android.ui.events.TokenPushEvent;
 import com.owncloud.android.utils.DisplayUtils;
 import com.owncloud.android.utils.PushUtils;
+import com.owncloud.android.utils.ThemeUtils;
 
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 import org.parceler.Parcels;
+
+import java.util.LinkedList;
+import java.util.List;
 
 import butterknife.BindString;
 import butterknife.BindView;
@@ -79,88 +92,26 @@ import butterknife.Unbinder;
  * This Activity presents the user information.
  */
 public class UserInfoActivity extends FileActivity {
-    private static final String TAG = UserInfoActivity.class.getSimpleName();
+    public static final String KEY_ACCOUNT = "ACCOUNT";
 
+    private static final String TAG = UserInfoActivity.class.getSimpleName();
     private static final String KEY_USER_DATA = "USER_DATA";
-    private static final String KEY_ACCOUNT = "ACCOUNT";
     private static final String KEY_DIRECT_REMOVE = "DIRECT_REMOVE";
 
     private static final int KEY_DELETE_CODE = 101;
 
-    @BindView(R.id.empty_list_view)
-    public LinearLayout emptyContentContainer;
-
-    @BindView(R.id.empty_list_view_text)
-    public TextView emptyContentMessage;
-
-    @BindView(R.id.empty_list_view_headline)
-    public TextView emptyContentHeadline;
-
-    @BindView(R.id.empty_list_icon)
-    public ImageView emptyContentIcon;
-
-    @BindView(R.id.user_info_view)
-    public LinearLayout userInfoView;
-
-    @BindView(R.id.user_icon)
-    public ImageView avatar;
-
-    @BindView(R.id.drawer_username)
-    public TextView userName;
-
-    @BindView(R.id.drawer_username_full)
-    public TextView fullName;
-
-    @BindView(R.id.phone_container)
-    public View mPhoneNumberContainer;
-
-    @BindView(R.id.phone_number)
-    public TextView mPhoneNumberTextView;
-
-    @BindView(R.id.phone_icon)
-    public ImageView mPhoneNumberIcon;
-
-    @BindView(R.id.email_container)
-    public View mEmailContainer;
-
-    @BindView(R.id.email_address)
-    public TextView mEmailAddressTextView;
-
-    @BindView(R.id.email_icon)
-    public ImageView mEmailIcon;
-
-    @BindView(R.id.address_container)
-    public View mAddressContainer;
-
-    @BindView(R.id.address)
-    public TextView mAddressTextView;
-
-    @BindView(R.id.address_icon)
-    public ImageView mAddressIcon;
-
-    @BindView(R.id.website_container)
-    public View mWebsiteContainer;
-
-    @BindView(R.id.website_address)
-    public TextView mWebsiteTextView;
-
-    @BindView(R.id.website_icon)
-    public ImageView mWebsiteIcon;
-
-    @BindView(R.id.twitter_container)
-    public View mTwitterContainer;
-
-    @BindView(R.id.twitter_handle)
-    public TextView mTwitterHandleTextView;
-
-    @BindView(R.id.twitter_icon)
-    public ImageView mTwitterIcon;
-
-    @BindView(R.id.empty_list_progress)
-    public ProgressBar multiListProgressBar;
-
-    @BindString(R.string.preview_sorry)
-    public String sorryMessage;
+    @BindView(R.id.empty_list_view) protected LinearLayout emptyContentContainer;
+    @BindView(R.id.empty_list_view_text) protected TextView emptyContentMessage;
+    @BindView(R.id.empty_list_view_headline) protected TextView emptyContentHeadline;
+    @BindView(R.id.empty_list_icon) protected ImageView emptyContentIcon;
+    @BindView(R.id.user_info_view) protected LinearLayout userInfoView;
+    @BindView(R.id.user_icon) protected ImageView avatar;
+    @BindView(R.id.userinfo_username) protected TextView userName;
+    @BindView(R.id.userinfo_username_full) protected TextView fullName;
+    @BindView(R.id.user_info_list) protected RecyclerView mUserInfoList;
+    @BindView(R.id.empty_list_progress) protected ProgressBar multiListProgressBar;
+    
+    @BindString(R.string.user_information_retrieval_error) protected String sorryMessage;
 
     private float mCurrentAccountAvatarRadiusDimension;
 
@@ -187,20 +138,26 @@ public class UserInfoActivity extends FileActivity {
         setContentView(R.layout.user_info_layout);
         unbinder = ButterKnife.bind(this);
 
-        setupToolbar();
-        updateActionBarTitleAndHomeButtonByString("");
-
         setAccount(AccountUtils.getCurrentOwnCloudAccount(this));
         onAccountSet(false);
 
+        boolean useBackgroundImage = URLUtil.isValidUrl(
+                getStorageManager().getCapability(account.name).getServerBackground());
+
+        setupToolbar(useBackgroundImage);
+        updateActionBarTitleAndHomeButtonByString("");
+
+        mUserInfoList.setAdapter(new UserInfoAdapter(null, ThemeUtils.primaryColor(getAccount(), this)));
+        mUserInfoList.addItemDecoration(new DividerItemDecoration(this, DividerItemDecoration.VERTICAL));
+
         if (userInfo != null) {
             populateUserInfoUi(userInfo);
-            emptyContentContainer.setVisibility(View.GONE);
-            userInfoView.setVisibility(View.VISIBLE);
         } else {
             setMultiListLoadingMessage();
             fetchAndSetData();
         }
+
+        setHeaderImage();
     }
 
     @Override
@@ -217,9 +174,6 @@ public class UserInfoActivity extends FileActivity {
         switch (item.getItemId()) {
             case android.R.id.home:
                 onBackPressed();
-                break;
-            case R.id.change_password:
-                changeAccountPassword(account);
                 break;
             case R.id.delete_account:
                 openAccountRemovalConfirmationDialog(account, getFragmentManager(), false);
@@ -242,68 +196,116 @@ public class UserInfoActivity extends FileActivity {
             emptyContentMessage.setText("");
 
             emptyContentIcon.setVisibility(View.GONE);
+            emptyContentMessage.setVisibility(View.GONE);
+            multiListProgressBar.getIndeterminateDrawable().setColorFilter(ThemeUtils.primaryColor(this),
+                    PorterDuff.Mode.SRC_IN);
             multiListProgressBar.setVisibility(View.VISIBLE);
         }
     }
 
-    private void setMessageForMultiList(String headline, String message) {
+    private void setErrorMessageForMultiList(String headline, String message, @DrawableRes int errorResource) {
         if (emptyContentContainer != null && emptyContentMessage != null) {
             emptyContentHeadline.setText(headline);
             emptyContentMessage.setText(message);
+            emptyContentIcon.setImageResource(errorResource);
 
             multiListProgressBar.setVisibility(View.GONE);
+            emptyContentIcon.setVisibility(View.VISIBLE);
+            emptyContentMessage.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void setHeaderImage() {
+        if (getStorageManager().getCapability(account.name).getServerBackground() != null) {
+            ViewGroup appBar = findViewById(R.id.appbar);
+
+            if (appBar != null) {
+                ImageView backgroundImageView = appBar.findViewById(R.id.drawer_header_background);
+
+                String background = getStorageManager().getCapability(account.name).getServerBackground();
+                int primaryColor = ThemeUtils.primaryColor(getAccount(), this);
+
+                if (URLUtil.isValidUrl(background)) {
+                    // background image
+                    SimpleTarget target = new SimpleTarget<Drawable>() {
+                        @Override
+                        public void onResourceReady(Drawable resource, GlideAnimation glideAnimation) {
+                            Drawable[] drawables = {new ColorDrawable(primaryColor), resource};
+                            LayerDrawable layerDrawable = new LayerDrawable(drawables);
+                            backgroundImageView.setImageDrawable(layerDrawable);
+                        }
+
+                        @Override
+                        public void onLoadFailed(Exception e, Drawable errorDrawable) {
+                            Drawable[] drawables = {new ColorDrawable(primaryColor),
+                                    getResources().getDrawable(R.drawable.background)};
+                            LayerDrawable layerDrawable = new LayerDrawable(drawables);
+                            backgroundImageView.setImageDrawable(layerDrawable);
+                        }
+                    };
+
+                    Glide.with(this)
+                            .load(background)
+                            .centerCrop()
+                            .placeholder(R.drawable.background)
+                            .error(R.drawable.background)
+                            .crossFade()
+                            .into(target);
+                } else {
+                    // plain color
+                    backgroundImageView.setImageDrawable(new ColorDrawable(primaryColor));
+                }
+            }
         }
     }
 
     private void populateUserInfoUi(UserInfo userInfo) {
         userName.setText(account.name);
-        DisplayUtils.setAvatar(account, UserInfoActivity.this,
-                mCurrentAccountAvatarRadiusDimension, getResources(), getStorageManager(),avatar);
+        avatar.setTag(account.name);
+        DisplayUtils.setAvatar(account, UserInfoActivity.this, mCurrentAccountAvatarRadiusDimension, getResources(),
+                getStorageManager(), avatar, this);
 
-        int tint = ContextCompat.getColor(this, R.color.primary);
+        int tint = ThemeUtils.primaryColor(account, this);
 
-        if (userInfo != null) {
-            if (!TextUtils.isEmpty(userInfo.getDisplayName())) {
-                fullName.setText(userInfo.getDisplayName());
-            }
-
-            populateUserInfoElement(mPhoneNumberContainer, mPhoneNumberTextView, userInfo.getPhone(),
-                    mPhoneNumberIcon, tint);
-            populateUserInfoElement(mEmailContainer, mEmailAddressTextView, userInfo.getEmail(), mEmailIcon, tint);
-            populateUserInfoElement(mAddressContainer, mAddressTextView, userInfo.getAddress(), mAddressIcon, tint);
-
-            populateUserInfoElement(
-                    mWebsiteContainer,
-                    mWebsiteTextView,
-                    DisplayUtils.beautifyURL(userInfo.getWebpage()),
-                    mWebsiteIcon,
-                    tint);
-            populateUserInfoElement(
-                    mTwitterContainer,
-                    mTwitterHandleTextView,
-                    DisplayUtils.beautifyTwitterHandle(userInfo.getTwitter()),
-                    mTwitterIcon,
-                    tint);
+        if (!TextUtils.isEmpty(userInfo.getDisplayName())) {
+            fullName.setText(userInfo.getDisplayName());
         }
-    }
+        
+        if (userInfo.getPhone() == null && userInfo.getEmail() == null && userInfo.getAddress() == null
+                && userInfo.getTwitter() == null && userInfo.getWebsite() == null) {
 
-    private void populateUserInfoElement(View container, TextView textView, String text, ImageView icon, @ColorInt int
-            tint) {
-        if (!TextUtils.isEmpty(text)) {
-            textView.setText(text);
-            DrawableCompat.setTint(icon.getDrawable(), tint);
+            setErrorMessageForMultiList(getString(R.string.userinfo_no_info_headline),
+                    getString(R.string.userinfo_no_info_text), R.drawable.ic_user);
         } else {
-            container.setVisibility(View.GONE);
+            emptyContentContainer.setVisibility(View.GONE);
+            userInfoView.setVisibility(View.VISIBLE);
+
+            if (mUserInfoList.getAdapter() instanceof UserInfoAdapter) {
+                mUserInfoList.setAdapter(new UserInfoAdapter(createUserInfoDetails(userInfo), tint));
+            }
         }
     }
 
-    private void changeAccountPassword(Account account) {
-        // let the user update credentials with one click
-        Intent updateAccountCredentials = new Intent(this, AuthenticatorActivity.class);
-        updateAccountCredentials.putExtra(AuthenticatorActivity.EXTRA_ACCOUNT, account);
-        updateAccountCredentials.putExtra(AuthenticatorActivity.EXTRA_ACTION,
-                AuthenticatorActivity.ACTION_UPDATE_TOKEN);
-        startActivity(updateAccountCredentials);
+    private List<UserInfoDetailsItem> createUserInfoDetails(UserInfo userInfo) {
+        List<UserInfoDetailsItem> result = new LinkedList<>();
+
+        addToListIfNeeded(result, R.drawable.ic_phone, userInfo.getPhone(), R.string.user_info_phone);
+        addToListIfNeeded(result, R.drawable.ic_email, userInfo.getEmail(), R.string.user_info_email);
+        addToListIfNeeded(result, R.drawable.ic_map_marker, userInfo.getAddress(), R.string.user_info_address);
+        addToListIfNeeded(result, R.drawable.ic_web, DisplayUtils.beautifyURL(userInfo.getWebsite()),
+                    R.string.user_info_website);
+        addToListIfNeeded(result, R.drawable.ic_twitter, DisplayUtils.beautifyTwitterHandle(userInfo.getTwitter()),
+                    R.string.user_info_twitter);
+
+        return result;
+    }
+
+    private void addToListIfNeeded(List<UserInfoDetailsItem> info,
+                                   @DrawableRes int icon,
+                                   String text,
+                                   @StringRes int contentDescriptionInt) {
+        if (!TextUtils.isEmpty(text))
+            info.add(new UserInfoDetailsItem(icon, text, getResources().getString(contentDescriptionInt)));
     }
 
     public static void openAccountRemovalConfirmationDialog(Account account, FragmentManager fragmentManager,
@@ -336,6 +338,18 @@ public class UserInfoActivity extends FileActivity {
             account = getArguments().getParcelable(KEY_ACCOUNT);
         }
 
+        @Override
+        public void onStart() {
+            super.onStart();
+
+            int color = ThemeUtils.primaryAccentColor(getActivity());
+
+            AlertDialog alertDialog = (AlertDialog) getDialog();
+
+            alertDialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(color);
+            alertDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(color);
+        }
+
         @NonNull
         @Override
         public Dialog onCreateDialog(Bundle savedInstanceState) {
@@ -345,67 +359,53 @@ public class UserInfoActivity extends FileActivity {
                     .setMessage(getResources().getString(R.string.delete_account_warning, account.name))
                     .setIcon(R.drawable.ic_warning)
                     .setPositiveButton(R.string.common_ok,
-                            new DialogInterface.OnClickListener() {
-                                @Override
-                                public void onClick(DialogInterface dialogInterface, int i) {
-                                    // remove contact backup job
-                                    ContactsPreferenceActivity.cancelContactBackupJobForAccount(getActivity(), account);
+                            (dialogInterface, i) -> {
+                                // remove contact backup job
+                                ContactsPreferenceActivity.cancelContactBackupJobForAccount(getActivity(), account);
 
-                                    ContentResolver contentResolver = getActivity().getContentResolver();
-                                    // delete all synced folder for an account
-                                    SyncedFolderProvider syncedFolderProvider = new SyncedFolderProvider(
-                                            contentResolver);
-                                    syncedFolderProvider.deleteSyncFoldersForAccount(account);
+                                ContentResolver contentResolver = getActivity().getContentResolver();
 
-                                    UploadsStorageManager uploadsStorageManager = new UploadsStorageManager(
-                                            contentResolver, getActivity());
-                                    uploadsStorageManager.cancelPendingAutoUploadJobsForAccount(account);
-                                    uploadsStorageManager.removeAccountUploads(account);
+                                // disable daily backup
+                                ArbitraryDataProvider arbitraryDataProvider = new ArbitraryDataProvider(
+                                        contentResolver);
 
-                                    // disable daily backup
-                                    ArbitraryDataProvider arbitraryDataProvider = new ArbitraryDataProvider(
-                                            contentResolver);
+                                arbitraryDataProvider.storeOrUpdateKeyValue(account.name,
+                                        ContactsPreferenceActivity.PREFERENCE_CONTACTS_AUTOMATIC_BACKUP,
+                                        "false");
 
-                                    arbitraryDataProvider.storeOrUpdateKeyValue(account,
-                                            ContactsPreferenceActivity.PREFERENCE_CONTACTS_AUTOMATIC_BACKUP,
-                                            "false");
+                                String arbitraryDataPushString;
 
-
-                                    String arbitraryDataPushString;
-
-                                    if (!TextUtils.isEmpty(arbitraryDataPushString = arbitraryDataProvider.getValue(
-                                            account, PushUtils.KEY_PUSH)) &&
-                                            !TextUtils.isEmpty(getResources().getString(R.string.push_server_url))) {
-                                        Gson gson = new Gson();
-                                        PushConfigurationState pushArbitraryData = gson.fromJson(arbitraryDataPushString,
-                                                PushConfigurationState.class);
-                                        pushArbitraryData.setShouldBeDeleted(true);
-                                        arbitraryDataProvider.storeOrUpdateKeyValue(account, PushUtils.KEY_PUSH,
-                                                gson.toJson(pushArbitraryData));
-                                        EventBus.getDefault().post(new TokenPushEvent());
-                                    }
-
-
-                                    if (getActivity() != null && !removeDirectly) {
-                                        Bundle bundle = new Bundle();
-                                        bundle.putParcelable(KEY_ACCOUNT, Parcels.wrap(account));
-                                        Intent intent = new Intent();
-                                        intent.putExtras(bundle);
-                                        getActivity().setResult(KEY_DELETE_CODE, intent);
-                                        getActivity().finish();
-                                    } else {
-                                        AccountManager am = (AccountManager) getActivity()
-                                                .getSystemService(ACCOUNT_SERVICE);
-
-                                        am.removeAccount(account, null, null);
-
-                                        Intent start = new Intent(getActivity(), FileDisplayActivity.class);
-                                        start.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                                        startActivity(start);
-
-                                    }
-
+                                if (!TextUtils.isEmpty(arbitraryDataPushString = arbitraryDataProvider.getValue(
+                                        account, PushUtils.KEY_PUSH)) &&
+                                        !TextUtils.isEmpty(getResources().getString(R.string.push_server_url))) {
+                                    Gson gson = new Gson();
+                                    PushConfigurationState pushArbitraryData = gson.fromJson(arbitraryDataPushString,
+                                            PushConfigurationState.class);
+                                    pushArbitraryData.setShouldBeDeleted(true);
+                                    arbitraryDataProvider.storeOrUpdateKeyValue(account.name, PushUtils.KEY_PUSH,
+                                            gson.toJson(pushArbitraryData));
+                                    EventBus.getDefault().post(new TokenPushEvent());
                                 }
+
+
+                                if (getActivity() != null && !removeDirectly) {
+                                    Bundle bundle = new Bundle();
+                                    bundle.putParcelable(KEY_ACCOUNT, Parcels.wrap(account));
+                                    Intent intent = new Intent();
+                                    intent.putExtras(bundle);
+                                    getActivity().setResult(KEY_DELETE_CODE, intent);
+                                    getActivity().finish();
+                                } else {
+                                    AccountManager am = (AccountManager) getActivity()
+                                            .getSystemService(ACCOUNT_SERVICE);
+
+                                    am.removeAccount(account, null, null);
+
+                                    Intent start = new Intent(getActivity(), FileDisplayActivity.class);
+                                    start.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                                    startActivity(start);
+                                }
+
                             })
                     .setNegativeButton(R.string.common_cancel, null)
                     .create();
@@ -413,29 +413,20 @@ public class UserInfoActivity extends FileActivity {
     }
 
     private void fetchAndSetData() {
-        Thread t = new Thread(new Runnable() {
-            public void run() {
+        Thread t = new Thread(() -> {
+            RemoteOperation getRemoteUserInfoOperation = new GetRemoteUserInfoOperation();
+            RemoteOperationResult result = getRemoteUserInfoOperation.execute(account, UserInfoActivity.this);
 
-                RemoteOperation getRemoteUserInfoOperation = new GetRemoteUserInfoOperation();
-                RemoteOperationResult result = getRemoteUserInfoOperation.execute(account, UserInfoActivity.this);
+            if (result.isSuccess() && result.getData() != null) {
+                userInfo = (UserInfo) result.getData().get(0);
 
-                if (result.isSuccess() && result.getData() != null) {
-                    userInfo = (UserInfo) result.getData().get(0);
+                runOnUiThread(() -> populateUserInfoUi(userInfo));
 
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            populateUserInfoUi(userInfo);
-
-                            emptyContentContainer.setVisibility(View.GONE);
-                            userInfoView.setVisibility(View.VISIBLE);
-                        }
-                    });
-                } else {
-                    // show error
-                    setMessageForMultiList(result.getLogMessage(), sorryMessage);
-                    Log_OC.d(TAG, result.getLogMessage());
-                }
+            } else {
+                // show error
+                runOnUiThread(() -> setErrorMessageForMultiList(sorryMessage, result.getLogMessage(),
+                        R.drawable.ic_list_empty_error));
+                Log_OC.d(TAG, result.getLogMessage());
             }
         });
 
@@ -453,5 +444,66 @@ public class UserInfoActivity extends FileActivity {
     @Subscribe(threadMode = ThreadMode.BACKGROUND)
     public void onMessageEvent(TokenPushEvent event) {
         PushUtils.pushRegistrationToServer();
+    }
+
+
+    protected class UserInfoDetailsItem {
+        @DrawableRes public int icon;
+        public String text;
+        public String iconContentDescription;
+
+        public UserInfoDetailsItem(@DrawableRes int icon, String text, String iconContentDescription) {
+            this.icon = icon;
+            this.text = text;
+            this.iconContentDescription = iconContentDescription;
+        }
+    }
+
+    protected class UserInfoAdapter extends RecyclerView.Adapter<UserInfoAdapter.ViewHolder> {
+        protected List<UserInfoDetailsItem> mDisplayList;
+        @ColorInt protected int mTintColor;
+
+        public class ViewHolder extends RecyclerView.ViewHolder {
+
+            @BindView(R.id.icon) protected ImageView icon = null;
+            @BindView(R.id.text) protected TextView text = null;
+
+            public ViewHolder(View itemView) {
+                super(itemView);
+                ButterKnife.bind(this, itemView);
+            }
+        }
+
+        public UserInfoAdapter(List<UserInfoDetailsItem> displayList, @ColorInt int tintColor) {
+            mDisplayList = displayList == null ? new LinkedList<>() : displayList;
+            mTintColor = tintColor;
+        }
+
+        public void setData(List<UserInfoDetailsItem> displayList) {
+            mDisplayList = displayList == null ? new LinkedList<>() : displayList;
+            notifyDataSetChanged();
+        }
+
+        @Override
+        public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+            LayoutInflater inflater = LayoutInflater.from(parent.getContext());
+            View view = inflater.inflate(R.layout.user_info_details_table_item, parent, false);
+            ViewHolder holder = new ViewHolder(view);
+            return holder;
+        }
+
+        @Override
+        public void onBindViewHolder(ViewHolder holder, int position) {
+            UserInfoDetailsItem item = mDisplayList.get(position);
+            holder.icon.setImageResource(item.icon);
+            holder.text.setText(item.text);
+            holder.icon.setContentDescription(item.iconContentDescription);
+            DrawableCompat.setTint(holder.icon.getDrawable(), mTintColor);
+        }
+
+        @Override
+        public int getItemCount() {
+            return mDisplayList.size();
+        }
     }
 }

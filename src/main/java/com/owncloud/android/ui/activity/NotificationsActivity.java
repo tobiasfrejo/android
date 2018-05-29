@@ -1,4 +1,4 @@
-/**
+/*
  * Nextcloud Android client application
  *
  * @author Andy Scherzinger
@@ -27,8 +27,10 @@ import android.accounts.AuthenticatorException;
 import android.accounts.OperationCanceledException;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.PorterDuff;
 import android.os.Bundle;
 import android.support.design.widget.BottomNavigationView;
+import android.support.design.widget.Snackbar;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.widget.DividerItemDecoration;
 import android.support.v7.widget.LinearLayoutManager;
@@ -43,6 +45,8 @@ import android.widget.TextView;
 import com.owncloud.android.MainApp;
 import com.owncloud.android.R;
 import com.owncloud.android.authentication.AccountUtils;
+import com.owncloud.android.datamodel.ArbitraryDataProvider;
+import com.owncloud.android.jobs.NotificationJob;
 import com.owncloud.android.lib.common.OwnCloudAccount;
 import com.owncloud.android.lib.common.OwnCloudClient;
 import com.owncloud.android.lib.common.OwnCloudClientManagerFactory;
@@ -52,8 +56,9 @@ import com.owncloud.android.lib.common.utils.Log_OC;
 import com.owncloud.android.lib.resources.notifications.GetRemoteNotificationsOperation;
 import com.owncloud.android.lib.resources.notifications.models.Notification;
 import com.owncloud.android.ui.adapter.NotificationListAdapter;
-import com.owncloud.android.utils.AnalyticsUtils;
 import com.owncloud.android.utils.DisplayUtils;
+import com.owncloud.android.utils.PushUtils;
+import com.owncloud.android.utils.ThemeUtils;
 
 import java.io.IOException;
 import java.util.List;
@@ -69,7 +74,6 @@ import butterknife.Unbinder;
 public class NotificationsActivity extends FileActivity {
 
     private static final String TAG = NotificationsActivity.class.getSimpleName();
-    private static final String SCREEN_NAME = "Notifications";
 
     @BindView(R.id.empty_list_view)
     public LinearLayout emptyContentContainer;
@@ -102,6 +106,7 @@ public class NotificationsActivity extends FileActivity {
     private Unbinder unbinder;
 
     private NotificationListAdapter adapter;
+    private Snackbar snackbar = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -111,34 +116,95 @@ public class NotificationsActivity extends FileActivity {
         setContentView(R.layout.notifications_layout);
         unbinder = ButterKnife.bind(this);
 
+        String account;
+        Account currentAccount;
+        if (getIntent() != null && getIntent().getExtras() != null &&
+                (account = getIntent().getExtras().getString(NotificationJob.KEY_NOTIFICATION_ACCOUNT)) != null &&
+                (currentAccount = AccountUtils.getCurrentOwnCloudAccount(getApplicationContext())) != null &&
+                !account.equalsIgnoreCase(currentAccount.name)) {
+            AccountUtils.setCurrentOwnCloudAccount(getApplicationContext(), account);
+            setAccount(AccountUtils.getCurrentOwnCloudAccount(this));
+        }
+
         // setup toolbar
         setupToolbar();
 
-        swipeEmptyListRefreshLayout = (SwipeRefreshLayout) findViewById(R.id.swipe_containing_empty);
-        swipeListRefreshLayout = (SwipeRefreshLayout) findViewById(R.id.swipe_containing_list);
+        swipeEmptyListRefreshLayout = findViewById(R.id.swipe_containing_empty);
+        swipeListRefreshLayout = findViewById(R.id.swipe_containing_list);
 
         // setup drawer
         setupDrawer(R.id.nav_notifications);
-        getSupportActionBar().setTitle(getString(R.string.drawer_item_notifications));
+        ThemeUtils.setColoredTitle(getSupportActionBar(), getString(R.string.drawer_item_notifications), this);
 
-        swipeListRefreshLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
-            @Override
-            public void onRefresh() {
-                setLoadingMessage();
-                fetchAndSetData();
-            }
+        swipeListRefreshLayout.setOnRefreshListener(() -> {
+            setLoadingMessage();
+            fetchAndSetData();
         });
 
-        swipeEmptyListRefreshLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
-            @Override
-            public void onRefresh() {
-                setLoadingMessage();
-                fetchAndSetData();
+        swipeEmptyListRefreshLayout.setOnRefreshListener(() -> {
+            setLoadingMessage();
+            fetchAndSetData();
 
-            }
         });
 
+        setupPushWarning();
         setupContent();
+    }
+
+    private void setupPushWarning() {
+        if (snackbar != null) {
+            if (!snackbar.isShown()) {
+                snackbar.show();
+            }
+        } else {
+            Context context = getApplicationContext();
+            String pushUrl = context.getResources().getString(R.string.push_server_url);
+
+            if (pushUrl.isEmpty()) {
+                snackbar = Snackbar.make(emptyContentContainer, R.string.push_notifications_not_implemented,
+                        Snackbar.LENGTH_INDEFINITE);
+            } else {
+                Account account = AccountUtils.getCurrentOwnCloudAccount(context);
+                ArbitraryDataProvider arbitraryDataProvider = new ArbitraryDataProvider(getContentResolver());
+
+                if (account != null) {
+                    boolean usesOldLogin = arbitraryDataProvider.getBooleanValue(account.name,
+                            AccountUtils.ACCOUNT_USES_STANDARD_PASSWORD);
+
+                    if (usesOldLogin) {
+                        snackbar = Snackbar.make(emptyContentContainer, R.string.push_notifications_old_login,
+                                Snackbar.LENGTH_INDEFINITE);
+                    } else {
+                        String pushValue = arbitraryDataProvider.getValue(account.name, PushUtils.KEY_PUSH);
+
+                        if (pushValue == null || pushValue.isEmpty()) {
+                            snackbar = Snackbar.make(emptyContentContainer, R.string.push_notifications_temp_error,
+                                    Snackbar.LENGTH_INDEFINITE);
+                        }
+                    }
+                }
+            }
+
+            if (snackbar != null && !snackbar.isShown()) {
+                snackbar.show();
+            }
+        }
+    }
+
+    @Override
+    public void openDrawer() {
+        super.openDrawer();
+
+        if (snackbar != null && snackbar.isShown()) {
+            snackbar.dismiss();
+        }
+    }
+
+    @Override
+    public void closeDrawer() {
+        super.closeDrawer();
+
+        setupPushWarning();
     }
 
     public void onDestroy() {
@@ -159,6 +225,8 @@ public class NotificationsActivity extends FileActivity {
      */
     private void setupContent() {
         emptyContentIcon.setImageResource(R.drawable.ic_notification_light_grey);
+        emptyContentProgressBar.getIndeterminateDrawable().setColorFilter(ThemeUtils.primaryAccentColor(this),
+                PorterDuff.Mode.SRC_IN);
         setLoadingMessage();
 
         adapter = new NotificationListAdapter(this);
@@ -173,7 +241,7 @@ public class NotificationsActivity extends FileActivity {
         recyclerView.setLayoutManager(layoutManager);
         recyclerView.addItemDecoration(dividerItemDecoration);
 
-        BottomNavigationView bottomNavigationView = (BottomNavigationView) findViewById(R.id.bottom_navigation_view);
+        BottomNavigationView bottomNavigationView = findViewById(R.id.bottom_navigation_view);
 
         if (getResources().getBoolean(R.bool.bottom_toolbar_enabled)) {
             bottomNavigationView.setVisibility(View.VISIBLE);
@@ -191,11 +259,10 @@ public class NotificationsActivity extends FileActivity {
         final Account currentAccount = AccountUtils.getCurrentOwnCloudAccount(MainApp.getAppContext());
         final Context context = MainApp.getAppContext();
 
-        Thread t = new Thread(new Runnable() {
-            public void run() {
-                OwnCloudAccount ocAccount;
-                try {
-                    ocAccount = new OwnCloudAccount(currentAccount, context);
+        Thread t = new Thread(() -> {
+            try {
+                if (currentAccount != null) {
+                    OwnCloudAccount ocAccount = new OwnCloudAccount(currentAccount, context);
                     OwnCloudClient mClient = OwnCloudClientManagerFactory.getDefaultSingleton().
                             getClientFor(ocAccount, MainApp.getAppContext());
                     mClient.setOwnCloudVersion(AccountUtils.getServerVersion(currentAccount));
@@ -206,39 +273,36 @@ public class NotificationsActivity extends FileActivity {
                     if (result.isSuccess() && result.getNotificationData() != null) {
                         final List<Notification> notifications = result.getNotificationData();
 
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                if (notifications.size() > 0) {
-                                    populateList(notifications);
-                                    swipeEmptyListRefreshLayout.setVisibility(View.GONE);
-                                    swipeListRefreshLayout.setVisibility(View.VISIBLE);
-                                } else {
-                                    setEmptyContent(noResultsHeadline, noResultsMessage);
-                                }
+                        runOnUiThread(() -> {
+                            populateList(notifications);
+                            if (notifications.size() > 0) {
+                                swipeEmptyListRefreshLayout.setVisibility(View.GONE);
+                                swipeListRefreshLayout.setVisibility(View.VISIBLE);
+                            } else {
+                                setEmptyContent(noResultsHeadline, noResultsMessage);
+                                swipeListRefreshLayout.setVisibility(View.GONE);
+                                swipeEmptyListRefreshLayout.setVisibility(View.VISIBLE);
                             }
                         });
                     } else {
                         Log_OC.d(TAG, result.getLogMessage());
                         // show error
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                setEmptyContent(noResultsHeadline, result.getLogMessage());
-                            }
-                        });
+                        runOnUiThread(() -> setEmptyContent(noResultsHeadline, result.getLogMessage()));
                     }
 
                     hideRefreshLayoutLoader();
-                } catch (com.owncloud.android.lib.common.accounts.AccountUtils.AccountNotFoundException e) {
-                    Log_OC.e(TAG, "Account not found", e);
-                } catch (IOException e) {
-                    Log_OC.e(TAG, "IO error", e);
-                } catch (OperationCanceledException e) {
-                    Log_OC.e(TAG, "Operation has been canceled", e);
-                } catch (AuthenticatorException e) {
-                    Log_OC.e(TAG, "Authentication Exception", e);
+                } else {
+                    // show error
+                    runOnUiThread(() -> setEmptyContent(noResultsHeadline, getString(R.string.account_not_found)));
                 }
+            } catch (com.owncloud.android.lib.common.accounts.AccountUtils.AccountNotFoundException e) {
+                Log_OC.e(TAG, "Account not found", e);
+            } catch (IOException e) {
+                Log_OC.e(TAG, "IO error", e);
+            } catch (OperationCanceledException e) {
+                Log_OC.e(TAG, "Operation has been canceled", e);
+            } catch (AuthenticatorException e) {
+                Log_OC.e(TAG, "Authentication Exception", e);
             }
         });
 
@@ -247,12 +311,9 @@ public class NotificationsActivity extends FileActivity {
     }
 
     private void hideRefreshLayoutLoader() {
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                swipeListRefreshLayout.setRefreshing(false);
-                swipeEmptyListRefreshLayout.setRefreshing(false);
-            }
+        runOnUiThread(() -> {
+            swipeListRefreshLayout.setRefreshing(false);
+            swipeEmptyListRefreshLayout.setRefreshing(false);
         });
     }
 
@@ -279,7 +340,7 @@ public class NotificationsActivity extends FileActivity {
     }
 
     private void setLoadingMessage() {
-        emptyContentHeadline.setText(R.string.file_list_loading);
+        emptyContentHeadline.setText(R.string.notifications_loading_activity);
         emptyContentMessage.setText("");
 
         emptyContentIcon.setVisibility(View.GONE);
@@ -295,11 +356,4 @@ public class NotificationsActivity extends FileActivity {
             emptyContentIcon.setVisibility(View.VISIBLE);
         }
     }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-        AnalyticsUtils.setCurrentScreenName(this, SCREEN_NAME, TAG);
-    }
-
 }

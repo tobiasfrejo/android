@@ -1,7 +1,11 @@
-/**
+/*
  *   ownCloud Android client application
  *
+ *   @author masensio
+ *   @author David A. Velasco
+ *   @author Andy Scherzinger
  *   Copyright (C) 2015 ownCloud Inc.
+ *   Copyright (C) 2018 Andy Scherzinger
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License version 2,
@@ -14,7 +18,6 @@
  *
  *   You should have received a copy of the GNU General Public License
  *   along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 
 package com.owncloud.android.services;
@@ -442,8 +445,7 @@ public class OperationsService extends Service {
                                     getClientFor(ocAccount, mService);
 
                             OwnCloudVersion version = com.owncloud.android.authentication.AccountUtils.getServerVersion(
-                                    mLastTarget.mAccount
-                            );
+                                    mLastTarget.mAccount);
                             mOwnCloudClient.setOwnCloudVersion(version);
 
                             mStorageManager = new FileDataStorageManager(
@@ -584,8 +586,10 @@ public class OperationsService extends Service {
 
                     } else if (shareId > 0) {
                         operation = new UpdateSharePermissionsOperation(shareId);
-                        int permissions = operationIntent.getIntExtra(EXTRA_SHARE_PERMISSIONS, 1);
+                        int permissions = operationIntent.getIntExtra(EXTRA_SHARE_PERMISSIONS, -1);
                         ((UpdateSharePermissionsOperation)operation).setPermissions(permissions);
+                        long expirationDateInMillis = operationIntent.getLongExtra(EXTRA_SHARE_EXPIRATION_DATE_IN_MILLIS, 0L);
+                        ((UpdateSharePermissionsOperation)operation).setExpirationDate(expirationDateInMillis);
                     }
 
                 } else if (action.equals(ACTION_CREATE_SHARE_WITH_SHAREE)) {
@@ -644,25 +648,21 @@ public class OperationsService extends Service {
                 } else if (action.equals(ACTION_REMOVE)) {
                     // Remove file or folder
                     String remotePath = operationIntent.getStringExtra(EXTRA_REMOTE_PATH);
-                    boolean onlyLocalCopy = operationIntent.getBooleanExtra(EXTRA_REMOVE_ONLY_LOCAL,
-                            false);
-                    operation = new RemoveFileOperation(remotePath, onlyLocalCopy);
+                    boolean onlyLocalCopy = operationIntent.getBooleanExtra(EXTRA_REMOVE_ONLY_LOCAL, false);
+                    operation = new RemoveFileOperation(remotePath, onlyLocalCopy, account, getApplicationContext());
                     
                 } else if (action.equals(ACTION_CREATE_FOLDER)) {
                     // Create Folder
                     String remotePath = operationIntent.getStringExtra(EXTRA_REMOTE_PATH);
-                    boolean createFullPath = operationIntent.getBooleanExtra(EXTRA_CREATE_FULL_PATH,
-                            true);
+                    boolean createFullPath = operationIntent.getBooleanExtra(EXTRA_CREATE_FULL_PATH, true);
                     operation = new CreateFolderOperation(remotePath, createFullPath);
 
                 } else if (action.equals(ACTION_SYNC_FILE)) {
                     // Sync file
                     String remotePath = operationIntent.getStringExtra(EXTRA_REMOTE_PATH);
-                    boolean syncFileContents =
-                            operationIntent.getBooleanExtra(EXTRA_SYNC_FILE_CONTENTS, true);
-                    operation = new SynchronizeFileOperation(
-                            remotePath, account, syncFileContents, getApplicationContext()
-                    );
+                    boolean syncFileContents = operationIntent.getBooleanExtra(EXTRA_SYNC_FILE_CONTENTS, true);
+                    operation = new SynchronizeFileOperation(remotePath, account, syncFileContents,
+                            getApplicationContext());
                     
                 } else if (action.equals(ACTION_SYNC_FOLDER)) {
                     // Sync folder (all its descendant files are sync'ed)
@@ -678,13 +678,13 @@ public class OperationsService extends Service {
                     // Move file/folder
                     String remotePath = operationIntent.getStringExtra(EXTRA_REMOTE_PATH);
                     String newParentPath = operationIntent.getStringExtra(EXTRA_NEW_PARENT_PATH);
-                    operation = new MoveFileOperation(remotePath, newParentPath, account);
+                    operation = new MoveFileOperation(remotePath, newParentPath);
 
                 } else if (action.equals(ACTION_COPY_FILE)) {
                     // Copy file/folder
                     String remotePath = operationIntent.getStringExtra(EXTRA_REMOTE_PATH);
                     String newParentPath = operationIntent.getStringExtra(EXTRA_NEW_PARENT_PATH);
-                    operation = new CopyFileOperation(remotePath, newParentPath, account);
+                    operation = new CopyFileOperation(remotePath, newParentPath);
 
                 } else if (action.equals(ACTION_CHECK_CURRENT_CREDENTIALS)) {
                     // Check validity of currently stored credentials for a given account
